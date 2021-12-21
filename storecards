@@ -1,0 +1,1381 @@
+#!/bin/sh
+# the next line restarts using wish \
+exec wish "$0" -- "$@"
+
+
+# set up storecards
+
+# install the storecards programme to $program_dir
+# install the icon set to $program_dir/icons/storecards
+# install the basic card set to ~/.local/share/storecards
+# install a desktop file to ~/.local/share/applications
+
+# declarations
+
+global add_text barcode cardcode card_dir card_list cardname cardfile cardback code colours debug delete delete_text filename home icon_dir magick mobile name program_dir scan scan_side scanner screen_width selected
+
+# set directories
+
+set home $env(HOME)
+set program_dir [file dirname [info script]]
+if [string equal $program_dir "."] {
+	set program_dir [pwd]
+}
+set card_dir "$home/.local/share/storecards"
+# make sure that the card_list file exists
+if {[file exists "$card_dir/card_list"] == 0} {
+	set fid [open "$card_dir/card_list" w]
+	close $fid
+}
+
+set add_text ""
+set barcode false
+set cardname ""
+set cardcode ""
+set cardfile ""
+set cardback ""
+
+set colours [list black blue gold green red white]
+
+# set debug
+
+#set debug stdout
+set debug [open $home/storecards.debug w]
+
+set delete false
+set delete_text ""
+set filename ""
+set icon_dir "$program_dir/icons/storecards"
+# is this a mobile device
+if {[catch {exec  ps -el | grep phosh}]} {
+	set mobile false
+} else {
+	set mobile true
+}
+# is scanimage available to scan images
+set scan true
+if {[catch {exec which scanimage}] == 1} {set scan false}
+set scan_side "front"
+set scanner ""
+set screen_width [winfo vrootwidth .]
+set selected ""
+# is magick available to convert image formats
+set magick false
+if {[catch {exec which magick}] == 0} {set magick true}
+
+# check for required programmes
+#### ? zint prison barcode?
+
+set required "zint"
+foreach programme $required {
+	set result [catch {exec which $programme}]
+	if {$result == 1} {
+		tk_messageBox -default ok -detail "$programme is required by storecards" -icon warning -message "Failed Dependency" -parent . -title "Error" -type ok
+		exit
+	}
+}
+
+# PROCEDURES
+
+# CONFIGURATION OPTIONS
+
+proc .get_configs {} {
+
+global card_dir home icon_dir scanner
+
+	if [file exists "$home/.storecards.config"] {
+		set fid [open "$home/.storecards.config" r ]
+		while {[eof $fid] == 0} {
+			gets $fid config_option
+			if {$config_option == ""} {continue}
+			if {[string index $config_option 0] == "#"} {continue} 
+			set var [string trim [lrange $config_option 1 end]]
+			switch -- [lindex $config_option 0] {
+				icon_directory {set icon_dir $var}
+				scanner {set scanner $var}
+				storecard_directory {set card_dir $var}
+			}
+		}
+		close $fid
+	}
+}
+
+proc .put_configs {} {
+
+global card_dir home icon_dir scanner
+
+	set fid [open "$home/.storecards.config" w ]
+
+	puts $fid "# Configuration options for my tcl/tk storecards programme. Valid format is "
+	puts $fid "# variable option_list"
+	puts $fid "# This file will be overwritten when the storecards exits"
+	puts $fid ""
+	puts $fid "icon_directory $icon_dir"
+	puts $fid "scanner $scanner"
+	puts $fid "storecard_directory $card_dir"
+	
+
+	close $fid 
+}
+
+proc add_card {} {
+	
+global add_text barcode cardcode card_dir card_list cardname cardfile cardback debug delete_text mobile scan
+
+	puts $debug "add_card called"
+	
+	# grid the frame
+	grid .add_card -in . -row 4 -column 1 \
+		-columnspan 3 \
+		-sticky we
+		
+		grid .add_name_label -in .add_card -row 1 -column 1 
+		grid .add_name_entry -in .add_card -row 1 -column 2
+		grid .add_code_label -in .add_card -row 2 -column 1 
+		grid .add_code_entry -in .add_card -row 2 -column 2
+		
+		grid .add_card_data -in .add_card -row 3 -column 1 \
+			-columnspan 2 \
+			-sticky w
+
+	# enable the widget
+	.add_card_data configure -state normal
+		
+	# make sure that the widget is empty
+	.add_card_data delete 1.0 end
+	# make sure there are at least 5 line in the widget
+	for {set line 1} {$line <= 5} {incr line} {
+		.add_card_data insert end "\n"
+	}
+	
+	set_buttons add
+
+####	
+#	# raise the squeekboard
+	
+#	if {$mobile} {
+#		exec busctl call --user sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 SetVisible b true
+#	}
+####
+	
+	focus .add_name_entry
+	
+	# now get the name and the code
+
+	tkwait variable barcode
+	
+	if {$barcode != ""} {
+		puts $debug "add_card - barcode has been set"
+		
+		# now insert a message at line 3
+		insert_message .add_card_data 3 "Optionally: either select an image from file or scan the front of the card"
+		puts $debug "Scan or Select message placed in line [.add_card_data count -displaylines 0.0 end]"
+		
+		# if scanning is enabled add a scan button
+		if {$scan} {
+			.add_card_data window create 4.end -create {
+				button .add_scan \
+					-command {
+						scan_card $cardname $cardcode
+					} \
+					-text "Scan"
+			} -padx 20
+		}
+	
+		# in any case add a select button
+		.add_card_data window create 4.end -create {
+			button .add_select \
+				-command {
+					if {$cardfile == ""} {
+						grid remove .add_card
+						show_file_list
+						tkwait variable selected
+						set cardfile $selected
+						set selected ""
+						grid .add_card -in . -row 4 -column 1 \
+							-columnspan 3 \
+							-sticky we
+							
+						set_buttons add
+						
+						puts $debug ".add_card - select returned $cardfile"
+						if {$cardfile != ""} {
+							# if the extension is not .png then magick must be installed, so change the image type
+							if {[file extension $cardfile] != ".png"} {
+								puts $debug "add_card - $cardfile is not a png image so convert it"
+								exec magick $cardfile "[file rootname $cardfile].png"
+								set cardfile "[file rootname $cardfile].png"
+							}
+							puts $debug "add_card - $cardfile selected"
+							image create photo ${cardname}_card -file "$cardfile"
+							.add_card_data image create 5.0 -image ${cardname}_card -padx 30
+							# now change the scan select message
+							insert_message .add_card_data 3 "Finally, optionally: either select an image from file or scan the back of the card"
+						}
+					} else {
+						grid remove .add_card
+						show_file_list
+						tkwait variable selected
+						set cardback $selected
+						set selected ""
+						grid .add_card -in . -row 4 -column 1 \
+							-columnspan 3 \
+							-sticky we
+						set_buttons add
+						puts $debug ".add_card - select returned $cardback"
+						if {$cardback != ""} {
+							# if the extension is not .png then magick must be installed, so change the image type
+							if {[file extension $cardback] != ".png"} {
+								puts $debug "add_card - $cardback is not a png image so convert it"
+								exec magick $cardback "[file rootname $cardback].png"
+								set cardback "[file rootname $cardback].png"
+							}
+							puts $debug "add_card - $cardback selected"
+							image create photo ${cardname}_back -file "$cardback"
+							.add_card_data image create 5.end -image ${cardname}_back -padx 30
+							# delete the message and the buttons, they are no longer needed
+							insert_message .add_card_data 3 ""
+							insert_message .add_card_data 4 ""
+						}
+					}
+				} \
+				-text "Select"
+			} -padx 20
+		.add_card_data tag add center 1.0 end
+	}
+}
+
+proc delete_card {} {
+
+global card_dir card_list cardname debug delete
+
+	puts $debug "delete_card called - cardname is $cardname"
+	
+	if {!$delete} {
+		set delete true
+		.message configure -text "SELECT THE CARD TO DELETE AND HIT DELETE (-) AGAIN"
+	} else {
+		# now delete $cardname
+		puts $debug "delete_card - $cardname"
+		
+		puts $debug "delete_card - search list for \"[string tolower $cardname:*]\""
+		
+		set new_list ""
+		foreach element $card_list {
+			set items [split $element ":"]
+			if {[lindex $items 0] == [string tolower $cardname]} {continue}
+			lappend new_list $element
+		}
+		set card_list $new_list		
+
+		.message configure -text ""
+		set cardname ""
+		set delete false
+		puts $debug "delete_card complete - card list is \"$card_list\""
+		show_card_list
+	}
+}
+
+proc find_code {cardname} {
+	
+global card_dir card_list code debug name
+
+	set cardname [string tolower $cardname]
+	puts $debug "find_code called for $cardname in card_list"
+	
+	foreach element $card_list {
+		set items [split $element ":"]
+		if {[lindex $items 0] == $cardname} {return [lindex $items 1]}		
+	}
+
+	return 1
+}
+
+proc insert_message {widget line message} {
+	
+	$widget configure -state normal
+	$widget delete $line.0 $line.end
+	$widget insert $line.0 $message
+	$widget configure -state disabled
+	$widget tag add center $line.0 $line.end			
+}
+
+proc name_to_caps {cardname} {
+	
+global debug
+
+	puts $debug "name_to_caps called for $cardname"
+
+	set cardname [string totitle $cardname]
+
+	if {[string first " " $cardname] == -1} {
+		return $cardname
+	}
+	set words [split $cardname " "]
+	set cardname ""
+	foreach word $words {
+		set word [string totitle $word]
+		set cardname "$cardname $word"	
+	}
+	return [string trim $cardname]	
+}
+
+
+proc read_card_list {} {
+	
+global card_dir card_list debug
+
+	puts $debug "read_card_list called"
+
+	set fid [open "$card_dir/card_list" r]
+	set card_list [split [read $fid] \n]
+	close $fid
+}
+
+proc scroll_text {window set} {
+	
+global debug
+	
+	puts $debug "Call scroll for $window $set"
+
+	switch $set {
+		on {
+			switch $window {
+				.card_list {
+					bind .card_list <Motion> {
+						.card_list scan dragto %x %y
+						break
+					}
+				}
+				.file_list {
+					bind .file_list <Motion> {
+						.file_list scan dragto %x %y
+						break
+					}
+				}
+			}	
+		}
+		off {
+			bind $window <Motion> {}
+		}
+	}
+}
+
+proc set_buttons {process} {
+	
+global add_text bardcode card_dir card_list cardback cardcode cardfile cardname colours debug delete_text directory filenme front back
+	
+	puts $debug "set_buttons called for $process"
+	if {$process == "add"} {
+		# set the .add command
+		.add configure -command {
+			if {$cardname == "" || $cardcode == ""} {
+				# write a message
+				insert_message .add_card_data 1 "Store Card  requires a unique name and a code"
+				after 5000 {insert_message .add_card_data 1 ""}
+				if {$cardname == ""} {focus .add_name_entry}
+			} else {
+				# make sure that barcode has been set
+				if {!$barcode} {set barcode ""}
+				# add the card name and code to the list
+				lappend card_list "[string tolower "$cardname"]:$cardcode" 
+	
+				# if the face image exists then save it as the name image
+				if {$cardfile != ""} {
+					file copy -force "$cardfile" "$card_dir/[string tolower $cardname].png"
+				} else {
+					file delete "$card_dir/[string tolower $cardname].png"
+				}
+				if {$cardback != ""} {
+					file copy -force "$cardback" "$card_dir/[string tolower $cardname]_back.png"
+				} else {
+					file delete "$card_dir/[string tolower $cardname]_back.png"
+				}
+				puts $debug "add_card save name: $cardname, code, $cardcode, front copy is \"$cardfile\" and back copy is \"$cardback\""
+				
+				# remove the .add_card frame
+				grid forget .add_card
+				
+				show_card_list
+			}
+		}
+		set add_text "ADD"
+		
+		# set the .delete command
+		.delete configure -command {
+			grid forget .add_card
+			show_card_list
+		}
+		set delete_text "CANCEL"
+		
+	} elseif {$process == "show"} {
+		
+		# set the .add command
+		.add configure -command {
+			set cardname ""
+			grid forget .show_card
+			show_card_list
+		}
+		set add_text "LIST"
+		
+		# set the .delete command
+		.delete configure -command {
+			set cardname ""
+			grid forget .show_card
+			show_card_list
+		}	
+		set delete_text "LIST"
+		
+	} elseif {$process == "files"} {
+		
+		# set the .add command
+		.add configure -command {
+			# remove the .files frame
+			grid forget .files
+			set selected "$directory/$filename"
+		}
+		set add_text "SELECT"
+		
+		# set the .delete command
+		.delete configure -command {
+			set filename ""
+			# remove the .files frame
+			grid forget .files
+			set selected ""
+		}
+		set delete_text "CANCEL"
+		
+	} elseif {$process == "scan"} {
+		
+		# set the .add command
+		.add configure -command {
+			lappend card_list "[string tolower "$cardname"]:$cardcode"
+			file delete -force "$card_dir/scanned.png" "$card_dir/cropped.png" "$card_dir/deskewed.png" "$card_dir/trimmed.png" "$card_dir/scan.png"
+			grid forget .scanner
+			grid forget .add_card
+			show_card $cardname
+		}
+		set add_text "ADD"
+		
+		# set the .delete command
+		.delete configure -command {
+			file delete -force "$card_dir/scanned.png" "$card_dir/cropped.png" "$card_dir/deskewed.png" "$card_dir/trimmed.png" "$card_dir/scan.png"
+			file delete "$card_dir/[string tolower $cardname].png" "$card_dir/[string tolower $cardname]_back.png"
+			grid forget .scanner
+			
+			# reset the add and delete buttons
+			# set the .add command
+			.add configure -command {
+				if {$cardname == "" || $cardcode == ""} {
+					# write a message
+					insert_message .add_card_data 1 "Store Card  requires a unique name and a code"
+					after 5000 {insert_message .add_card_data 1 ""}
+					if {$cardname == ""} {focus .add_name_entry}
+				} else {
+					puts $debug "add_card save name: $cardname, code, $cardcode, front copy \"$cardfile\" to  \"$card_dir/[string tolower $cardname].png\" and back copy \"$cardback\" to  \"$card_dir/[string tolower $cardname]_back.png\""
+					# add the card name and code to the list
+					lappend card_list "[string tolower "$cardname"]:$cardcode"
+					# if the face image exists then save it as the name image
+					if {$cardfile != ""} {
+						file copy -force "$cardfile" "$card_dir/[string tolower $cardname].png"
+					}
+					if {$cardback != ""} {
+						file copy -force "$cardback" "$card_dir/[string tolower $cardname]_back.png"
+					}
+					# remove the .add_card frame
+					grid forget .add_card
+					show_card_list
+				}
+			}
+			# set the .delete command
+			.delete configure -command {
+				grid forget .add_card
+				show_card_list
+			}
+		
+			grid .add_card -in . -row 4 -column 1 \
+			-columnspan 3 \
+			-sticky we
+		}
+		set delete_text "CANCEL"
+		
+	} elseif {$process == "cards"} {
+		
+		# set the .add command
+		.add configure -command {
+			# remove the .cards frame
+			grid forget .cards
+			# forget any previous card data
+			set barcode false
+			set cardname ""
+			set cardcode ""
+			set cardfile ""
+			set cardback ""
+			add_card
+		}
+		set add_text "ADD"
+		
+		# set the .delete command
+		.delete configure -command {delete_card}
+		set delete_text "DELETE"
+	}
+}
+
+proc show_card_list {} {
+	
+global add_text card_dir card_list cardname colours debug delete_text front back
+
+
+	puts $debug "show_card_list called"
+
+	# grid the frame
+	grid .cards -in . -row 4 -column 1 \
+		-columnspan 2 \
+		-sticky we
+	
+	grid .card_list -in .cards -row 1 -column 1 
+	
+	set_buttons cards
+	
+	# set the state for .card_list
+	.card_list configure -state normal
+	
+	# make sure than the .card_list is empty
+	.card_list delete 0.0 end
+
+	foreach element $card_list {
+		if {$element == ""} {continue}
+		# name:code
+		set element [split $element ":"]
+		set name [lindex $element 0]
+		set code [lindex $element 1]
+		set card ""
+
+		if {[file exists "$card_dir/$name.png"]} {
+			set card "$card_dir/$name.png"	
+		} else {
+			# set a random colour card and save it for future use.
+			set card "$card_dir/[lindex $colours [expr int(rand() * 5)]].png"
+			file copy -force "$card" "$card_dir/$name.png"
+		}
+		image create photo ${name}_card -file "$card"
+		image create photo ${name}_icon
+		${name}_icon copy ${name}_card -subsample 4
+
+		.card_list image create end -image ${name}_icon -padx 20
+		.card_list insert end "[name_to_caps $name]\n"
+	}
+	
+	# set the state for .card_list
+	.card_list configure -state disabled
+}
+
+
+proc get_file_list {} {
+	
+global card_dir debug directory magick
+	
+	# make sure than the .file_list is empty
+	.file_list delete 0.0 end
+
+	# get the list of files in the current directory
+	set dirlist [lsort [glob -directory $directory -nocomplain -tails -types {d r x} *]]
+	if {$magick} {
+		set filelist [lsort [glob -directory $directory -nocomplain -tails *.jpg *.jpeg *.pdf *.png *.pnm]]
+	} else {
+		set filelist [lsort [glob -directory $directory -nocomplain -tails *.png]]
+	}
+	# start with Home, Cards, Previous"
+	.file_list image create end -image home_icon -padx 20
+	.file_list insert end "Home\n"
+	.file_list image create end -image root_icon -padx 20
+	.file_list insert end "Root\n"
+	if {$directory != $card_dir} {
+		.file_list image create end -image dir_icon -padx 20
+		.file_list insert end "Cards\n"
+	}
+	foreach dir $dirlist {
+		if {$dir == ""} {continue}
+		.file_list image create end -image dir_icon -padx 20
+		.file_list insert end "$dir\n"
+	}
+	foreach file $filelist {
+		if {$file == ""} {continue}
+		# if the extension is not .png then use magick to create an icon from the png image
+		if {[file extension $file] != ".png"} {
+			exec magick "$directory/$file" "$directory/magick_[file rootname $file].png"
+			image create photo ${file}_card -file "$directory//magick_[file rootname $file].png"
+		} else {
+			image create photo ${file}_card -file "$directory/$file"
+		}
+		image create photo ${file}_icon
+		${file}_icon copy ${file}_card -subsample 6
+		.file_list image create end -image ${file}_icon -padx 20
+		.file_list insert end "$file\n"
+		file delete "$directory/magick*"
+	}
+}
+
+proc show_file_list {} {
+	
+global add_text card_dir selected debug delete_text filename directory
+
+
+	puts $debug "show_file_list called"
+
+	set filename ""
+	
+	# grid the frame
+	grid .files -in . -row 4 -column 1 \
+		-columnspan 2 \
+		-sticky nswe
+	
+	grid .file_list -in .files -row 1 -column 1 
+	
+	set_buttons files
+	
+	# set the state for .file_list
+	.file_list configure -state normal
+	
+	set directory $card_dir 
+	get_file_list
+	
+	# set the state for .file_list
+	.file_list configure -state disabled
+
+}
+
+proc get_scanner {} {
+	
+global cardcode cardname debug scanner
+
+	puts $debug "get_scanner called"
+
+	# grid the frame
+	grid .scanner -in . -row 4 -column 1 \
+		-columnspan 3 \
+		-sticky we
+		
+	grid .scan_card -in .scanner -row 1 -column 1
+	
+	# enable the widget
+	.scan_card configure -state normal
+		
+	# make sure that the widget is empty
+	.scan_card delete 1.0 end
+	# make sure there are at least 5 line in the widget
+	for {set line 1} {$line <= 5} {incr line} {
+		.scan_card insert end "\n"
+	}
+	
+	insert_message .scan_card 1 "Finding scanners ...."
+	update
+	set scanners [split [exec scanimage -f "\"%m\" \"%d\"%n"] \n]
+	puts $debug "get_scanner - found scanners \"$scanners\""
+
+	insert_message .scan_card 1 "Choose a scanner:"
+
+	set count 2
+	foreach line $scanners {
+		insert_message .scan_card $count "$line"
+		incr count
+	}
+	
+	# and disable the widget
+	.scan_card configure -state disabled
+	
+	puts $debug "get_scanner - now wait for scanner \"$scanner\""
+	tkwait variable scanner	
+	
+	# if necessary set the scanner to the last one in the list"
+	if {$scanner == ""} {set scanner $line}
+	puts $debug "get_scanner - scanner chosen \"$scanner\""
+	
+	set model [string range $scanner 1 [string first \" $scanner 2]-1]
+	set device [string range $scanner [string first \" $scanner [string first \" $scanner 2]+1]+1 end-1]
+	puts $debug "get_scanner - scanner model is $model, device is $device"
+	
+	set scanner [list $model $device]
+	
+	puts $debug "get_scanner - return scanner \"$scanner\""
+	
+	grid forget .scanner
+	 
+	scan_card $cardname $cardcode
+	
+}
+
+proc scan_card {cardname cardcode} {
+
+global add_text card_dir card_list debug delete_text scanner
+
+	puts $debug "scan_card called - cardname is $cardname"
+	
+	if {$scanner == ""} {
+		get_scanner
+	}
+	
+	# remove the .add_card frame but keep its contents
+	grid remove .add_card
+	
+	# grid the frame
+	grid .scanner -in . -row 4 -column 1 \
+		-columnspan 3 \
+		-sticky we
+		
+	grid .scan_card -in .scanner -row 1 -column 1
+	
+	# enable the widget
+	.scan_card configure -state normal
+		
+	# make sure that the widget is empty
+	.scan_card delete 1.0 end
+	# make sure there are at least 5 line in the widget
+	for {set line 1} {$line <= 5} {incr line} {
+		.scan_card insert end "\n"
+	}
+	
+	set_buttons scan
+
+	puts $debug "scan_card - scanner is \"$scanner\""
+	
+	set model [lindex $scanner 0]
+	set device [lindex $scanner 1]
+	
+	puts $debug "scan_card - scanner model is \"$model\", device is \"$device\""
+		
+	insert_message .scan_card 1 "Using scanner: $model"
+	
+	# and center the lines
+	.scan_card tag add center 1.0 end
+	
+	insert_message .scan_card 2 "Scan the front of the $cardname card or select a different scanner"
+
+	.scan_card window create 3.0 -create {
+		button .scanner_scan \
+			-command {
+				puts $debug "scan_card - now scan the $scan_side of the card"
+				# insert scanning message and remove the png etc
+				insert_message .scan_card 4 "Scanning ..."
+				insert_message .scan_card 5 ""
+				insert_message .scan_card 6 ""
+				update
+				puts $debug "scan_card - exec scanimage -d \"[lindex $scanner 1]\" --format=png --mode=Color -o \"$card_dir/scanned.png\""
+				set error [catch {exec scanimage -d "[lindex $scanner 1]" --format=png --mode=Color -o "$card_dir/scanned.png"} result]
+				if {$error != 0} {
+					puts $debug "scan_card - scanimage error $result"
+					insert_message .scan_card 4 "Scanner [lindex $scanner 0] is not available"
+				} else {
+					set error [catch {
+						# remove a few pixels from the image
+						exec magick "$card_dir/scanned.png" -gravity Center -crop 95%\! "$card_dir/cropped.png"
+						# descew
+						exec magick "$card_dir/cropped.png" -deskew 80% "$card_dir/deskewed.png"
+						# now trim off the white space
+						exec magick "$card_dir/deskewed.png" -fuzz 25% -trim "$card_dir/trimmed.png"
+						# and save the card image
+						exec magick "$card_dir/trimmed.png" +repage -crop 254x159+0+0\! "$card_dir/scan.png"
+					} result]
+					if {$error != 0} {
+						puts $debug "scan_card - magick errors $result"
+						if {[string first "geometry does not contain image" $result] != -1} {
+							insert_message .scan_card 4 "Scan does not contain a card image"
+						}
+					} else {
+						# remove the Scanning message, png etc
+						insert_message .scan_card 4 ""
+						insert_message .scan_card 5 ""
+						insert_message .scan_card 6 ""
+						
+						if {$scan_side == "front"} {
+							puts $debug "scan_card - scanned the front of the card"
+							file copy -force "$card_dir/scan.png" "$card_dir/[string tolower $cardname].png"
+							puts $debug "scan_card - and saved  it to \"$card_dir/[string tolower $cardname].png\""
+							image create photo front -file "$card_dir/[string tolower $cardname].png"						
+							.scan_card image create 5.0 -image front -padx 30
+							# remove Select button
+							.scan_card configure -state normal
+							.scan_card delete 3.1 3.end
+							.scan_card configure -state disabled
+							insert_message .scan_card 2 "Optionally scan the back of the $cardname card or add the card image"
+							update
+							set scan_side "back"
+						} else {
+							puts $debug "scan_card - scanned the back of the card"
+							file copy -force "$card_dir/scan.png" "$card_dir/[string tolower $cardname]_back.png"
+							puts $debug "scan_card - and saved  it to \"$card_dir/[string tolower $cardname]_back.png\""
+							image create photo back -file "$card_dir/[string tolower $cardname]_back.png"						
+							.scan_card image create 5.end -image back -padx 30
+							# remove the scan button
+							.scan_card configure -state normal
+							.scan_card delete 3.0 3.end
+							.scan_card configure -state disabled
+							insert_message .scan_card 2 "Either add the card images or cancel"
+							update
+							set scan_side "front"
+						}
+					}
+				}
+				} \
+			-text "Scan"
+		} -padx 20
+
+	.scan_card window create 3.end -create {
+		button .scanner_select \
+			-command {
+				puts $debug "scan_card - now select another scanner"
+				grid forget .scanner
+				set scanner ""
+				scan_card $cardname $cardcode
+			} \
+			-text "Select"
+		} -padx 20
+		
+	insert_message .scan_card 4 "Place the card in the middle, towards the top of the scanner bed, as shown below. If the scan is not accurate then select cancel and restart the scan."
+	.scan_card image create 5.0 -image scan
+	insert_message .scan_card 6 "(Cards with a white background may not scan well. Try placing a small black mark on the card at each corner)"
+
+	# and disable the widget
+	.scan_card configure -state disabled
+	
+}
+
+
+proc show_card {cardname} {
+
+global add_text card_dir debug delete_text
+
+	# remove the .cards frame
+	grid forget .cards
+		
+	# grid the frame
+	grid .show_card -in . -row 4 -column 1 \
+		-columnspan 3 \
+		-sticky we
+		
+		grid .card -in .show_card -row 1 -column 1
+	
+	# enable the widget
+	.card configure -state normal
+		
+	# make sure that the widget is empty
+	.card delete 1.0 end
+	# make sure there are at least 5 line in the widget
+	for {set line 1} {$line <= 5} {incr line} {
+		.card insert end "\n"
+	}
+	
+	set_buttons show
+	
+	#.card insert 1.0 "$cardname\n"
+	.card insert 1.0 "$cardname"
+
+	# and center the lines
+	.card tag add center 1.0 end
+
+	# add the barcode
+	set cardcode [find_code $cardname]
+	puts $debug "show_card - $cardname, $cardcode - show barcode"
+	
+	# show the barcode
+	set file "$card_dir/barcode.png"
+	file delete $file
+	set zintcode [string map {" " ""} $cardcode]
+	if {[string length $zintcode] == 13} {
+		exec zint --barcode=13 -o $file -d $zintcode
+	} else {
+		exec zint --barcode=20 -o $file -d $zintcode
+	}
+	image create photo barcode -file $file
+	# insert the barcode
+	.card image create 3.0 -image barcode
+	file delete $file
+	
+	# convert cardname to lower case
+	set cardname [string tolower $cardname]
+	# make sure that the line is empty
+	.card delete 5.0 5.end
+	# now show any front and back images
+	if {[file exists "$card_dir/$cardname.png"]} {
+		# add the image of the front of the card
+		image create photo ${cardname}_card -file "$card_dir/$cardname.png"
+		.card image create 5.0 -image ${cardname}_card -padx 30
+	}
+	if {[file exists "$card_dir/${cardname}_back.png"]} {
+		# add the image of the back of the card
+		image create photo ${cardname}_back -file "$card_dir/${cardname}_back.png"
+		.card image create 5.end -image ${cardname}_back -padx 30
+	}	
+	
+	# disable the widget
+	.card configure -state disabled
+}
+
+proc write_card_list {} {
+
+global card_list card_dir debug name code
+	
+	puts $debug "write_card_list - called"
+	
+	set fid [open "$card_dir/card_list" w]
+	foreach element $card_list {
+		if {$element == ""} {continue}
+		puts $fid $element
+	}
+	close $fid
+}
+
+# get the current configuration
+
+.get_configs
+
+puts $debug "get_configs returned card_dir \"$card_dir\" icon_dir \"$icon_dir\" and scanner \"$scanner\""
+
+# IMAGES
+
+puts $debug "Create images"
+
+# The store card dafault images are 254x159, transparent background, rounded rectamgle - corners 35, text sans 25 bold.
+# The store card list icons are 1/4th size.
+# The store card file icons are 1/6th size and the standard file icons (below are 42x42
+
+image create photo add -file "$icon_dir/add.png"
+image create photo delete -file "$icon_dir/remove.png"
+image create photo scan -file "$icon_dir/scan.png"
+# folder icons
+image create photo dir_icon -file "$icon_dir/folder-blue.png"
+image create photo root_icon -file "$icon_dir/folder-red.png"
+image create photo home_icon -file "$icon_dir/go-home.png"
+
+# WINDOWS
+
+puts $debug "Set up windows"
+
+# Main window
+
+# there may be a problem setting the width of the text widgets
+# it seems that they will be set to the screen width if no other width is specified
+# we need to test this now on the pinephone 
+# the pinephone screen is 720x1368+0+32 which is actually double its true geometry of 360x648+0+32
+# hopefully this will be suitable to reflect other phones
+# if it runs with any geometry being specified, on the phone, then we can leave the geometry blank 
+# or set it for a computer instead of phosh (set error [pgrep phosh], 0 true, 1 false)
+
+if {$mobile} {
+	set screen_width [winfo vrootwidth .]
+	wm geometry . "[winfo vrootwidth .]x[winfo vrootheight .]+0+32"
+} else {
+	#set screen_width 720
+	#wm geometry . 720x1368+0+32
+	# this geometry mimicks the pinephone screen
+	set screen_width 360
+	wm geometry . 360x684+200+32
+}
+
+wm protocol . WM_DELETE_WINDOW {
+	puts $debug "Exit called - write card_list"
+	write_card_list
+	.put_configs
+	exit
+}
+
+label .header \
+	-font {TkHeaderFont 14 bold} \
+	-foreground red \
+	-text "- S T O R E   C A R D S -"
+
+button .add \
+	-command {} \
+	-image add \
+	-relief flat 
+
+label .message \
+	-anchor center \
+	-font "TkTextFont 10 bold" \
+	-text "" \
+	-wraplength 22
+	
+	# set the wraplength of the label
+	puts $debug "The screen width is $screen_width"
+	puts $debug "The two buttons are 48+4 pixels each"
+	puts $debug "The maximum width of the label is [expr $screen_width - (52 * 2)]"
+	.message configure -wraplength [expr $screen_width - (52 * 2)]
+	
+button .delete \
+	-command {} \
+	-image delete \
+	-relief flat 
+	
+label .add_label \
+	-font "TkTextFont 6" \
+	-textvariable add_text
+
+label .delete_label \
+	-font "TkTextFont 6" \
+	-textvariable delete_text
+			
+frame .cards
+
+	text .card_list \
+		-font "TkTextFont 20" \
+		-foreground "Black" \
+		-spacing1 30 \
+		-wrap word 
+		
+	# set the width of the text
+	.card_list configure -width [expr int($screen_width / [font measure [.card_list cget -font] 0])]
+	
+	# set the selectbackground to the normal background
+	.card_list configure -selectbackground [.card_list cget -background]
+		
+	bind .card_list <ButtonPress-1> {
+		set markrow %y
+		puts $debug "Button 1 pressed at %y"
+		.card_list scan mark %x %y
+		scroll_text .card_list on
+	}
+	bind .card_list <ButtonRelease-1> {
+		puts $debug "Button 1 released at %y"
+		scroll_text .card_list off
+		if {$markrow == %y} {	
+			set index [.card_list index @%x,%y]
+			set line [expr int($index)]
+			
+			if {$delete} {
+				if {$cardname != ""} {
+					puts $debug "Cardname is $cardname, forget cardname"
+					set cardname ""
+					# don't throw an error if the tags have already been deleted
+					catch {.card_list tag remove highlight highlight.first highlight.last}					
+				} else {
+					puts $debug "Cardname is blank - set cardname"
+					set cardname [.card_list get -displaychars $line.0 $line.end]
+					# highlight the line
+					.card_list tag add highlight $line.0 $line.end 
+					# set the .delete command to confirm
+				}
+			} else {
+				set cardname [.card_list get -displaychars $line.0 $line.end]
+				if {$cardname != ""} {
+					puts $debug "Now call show_card"
+					show_card $cardname
+				}
+			}
+		}	
+	}
+	
+	# set up some tags for the text field '.card_list'
+	.card_list tag configure highlight -foreground "Red" -font "TkTextFont 20 bold"
+
+frame .files
+
+	text .file_list \
+		-font "TkTextFont 12" \
+		-foreground "Black" \
+		-spacing1 10 
+		#-wrap word 
+	
+	# set the width of the text
+	.file_list configure -width [expr int($screen_width / [font measure [.file_list cget -font] 0])]
+	
+	# set the selectbackground to the normal background
+	.file_list configure -selectbackground [.file_list cget -background]
+	
+	# hide the cursor
+	#.file_list configure -cursor "hand1 [.file_list cget -bg] [.file_list cget -bg]" \
+		
+	bind .file_list <ButtonPress-1> {
+		set markrow %y
+		puts $debug "Button 1 pressed at %y"
+		.file_list scan mark %x %y
+		scroll_text .file_list on
+	}
+	
+	bind .file_list <ButtonRelease-1> {
+		puts $debug "Button 1 released at %y"
+		scroll_text .file_list off
+		# if we have barely moved [expr abs($markrow - %y)] < 5
+		if {$markrow == %y} {	
+			set index [.file_list index @%x,%y]
+			set line [expr int($index)]
+			
+			# set the state for .file_list
+			.file_list configure -state normal
+	
+			if {$filename != ""} {
+				set filename ""
+				# don't throw an error if the tags have already been deleted
+				catch {.file_list tag remove highlight highlight.first highlight.last}					
+			} 
+			puts $debug "Filename is blank - set filename"
+			set filename [.file_list get -displaychars $line.0 $line.end]
+			if {$filename == "Home"} {
+				set directory $home
+				get_file_list				
+				set filename ""
+			} elseif { $filename == "Root"} {
+				set directory "/"
+				get_file_list				
+				set filename ""
+			} elseif { $filename == "Cards"} {
+				set directory $card_dir
+				get_file_list				
+				set filename ""
+			} elseif {[file isdirectory "$directory/$filename"]} {
+				set directory "$directory/$filename"
+				get_file_list				
+				set filename ""
+			} else {
+				# highlight the line
+				.file_list tag add highlight $line.0 $line.end 
+			}
+			# set the state for .file_list
+			.file_list configure -state disabled
+		}	
+	}
+	
+	# set up some tags for the text field '.file_list'
+	.file_list tag configure highlight -foreground "Blue" -font "TkTextFont 12 bold"
+
+frame .add_card
+
+	label .add_name_label \
+		-anchor nw \
+		-height 2 \
+		-text "NAME:" \
+		-width 7
+		
+	entry .add_name_entry \
+		-font "TkTextFont 16" \
+		-textvariable cardname \
+		-width 25
+		
+	bind .add_name_entry <FocusIn> {
+		# raise the squeekboard
+		if {$mobile} {
+			exec busctl call --user sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 SetVisible b true
+		}		
+	}
+		
+	bind .add_name_entry <FocusOut> {
+		puts $debug "FocusOut on .add_name_entry"
+		set cardname [string trim $cardname]
+		if {$cardname == ""} {
+			puts $debug ".add_code_entry has no name"
+			# message $cardname must be unique
+			insert_message .add_card_data 1 "Storecard requires a unique card name" 
+			focus .add_name_entry
+		} elseif {[find_code $cardname] != 1} {
+			puts $debug "add_card - [name_to_caps $cardname] already exists"
+			# message $cardname must be unique
+			insert_message .add_card_data 1 "[name_to_caps $cardname] already exists - Storecard requires a unique card name"
+			after 2000 {
+				set cardname ""
+				focus .add_name_entry
+			}
+		} else {
+			insert_message .add_card_data 1 ""
+			set cardname [name_to_caps $cardname]	
+			focus .add_code_entry
+		}
+		# make sure that the validation is still set for .add_code_entry
+		.add_code_entry configure -validate key
+	}
+	
+	bind .add_name_entry <Return> [bind .add_name_entry <FocusOut>]
+		
+	label .add_code_label \
+		-anchor nw \
+		-height 2 \
+		-text "CODE:" \
+		-width 7
+		
+	entry .add_code_entry \
+		-font "TkTextFont 16" \
+		-textvariable cardcode \
+		-validate key \
+		-validatecommand {
+			if {[string first %S "0123456789 "] != -1} { 
+				return 1
+			} else {
+				return 0
+			}
+		} \
+		-width 25
+	
+	bind .add_code_entry <FocusIn> {
+		# raise the squeekboard
+		if {$mobile} {
+			exec busctl call --user sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 SetVisible b true
+		}		
+	}
+	
+	bind .add_code_entry <FocusOut> {
+		puts $debug "FocusOut from .add_code_entry"
+		if {$cardcode == ""} {
+			puts $debug ".add_code_entry has no code"
+			# if we are in the name entry then do nothing, allows editing the name
+			if {$cardname != "" && [focus] != ".add_name_entry"} {
+				insert_message .add_card_data 1 "Store Card requires a code for $cardname"
+				after 2000 {focus .add_code_entry}
+				after 5000 {insert_message .add_card_data 1 ""}
+			}
+		} else {
+			set file "$card_dir/barcode.png"
+			file delete $file
+			set zintcode [string map {" " ""} $cardcode]
+			if {[string length $zintcode] == 13} {
+				exec zint --barcode=13 -o $file -d $zintcode
+			} else {
+				exec zint --barcode=20 -o $file -d $zintcode
+			}
+			image create photo barcode -file $file
+			# make sure that the line is empty
+			insert_message .add_card_data 2 ""
+			# hide the squeekboard
+			if {$mobile} {
+				exec busctl call --user sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 SetVisible b false
+			}
+			# insert the barcode
+			.add_card_data image create 2.0 -image barcode
+			#.add_card_data tag add center 2.0 2.end
+			file delete $file
+			set barcode true
+		}
+	}	
+	
+	bind .add_code_entry <Return> [bind .add_code_entry <FocusOut>]
+	
+	# the width of the text box depends on the size of the font, e.g.12 is 72
+	text .add_card_data \
+		-font "TkTextFont 12" \
+		-spacing1 5 \
+		-spacing2 2 \
+		-state normal \
+		-wrap word
+		
+	# set the width of the text
+	.add_card_data configure -width [expr int($screen_width / [font measure [.add_card_data cget -font] 0])]
+
+	# set the selectbackground to the normal background
+	.add_card_data configure -selectbackground [.add_card_data cget -background]
+	# make sure there are at least 5 line in the widget
+	for {set line 1} {$line <= 5} {incr line} {
+		.add_card_data insert end "\n"
+	}
+	# center all the objects in the widget
+	.add_card_data tag add center 0.0 end
+	# and disble the widget to stop direct entries
+	.add_card_data configure -state disabled
+	
+	# set the selectbackground to the normal background
+	.add_card_data configure -selectbackground [.add_card_data cget -background]
+		
+	# set up some tags for the text field '.add_card_data'
+	.add_card_data tag configure center -justify center
+	
+	puts $debug "The requested width of the .add_card_data widget is [winfo reqwidth .add_card_data]"
+	puts $debug "The width of the .add_card_data font ([.add_card_data cget -font]) is [font measure [.add_card_data cget -font] 0]"
+	
+frame .scanner
+
+	# the width of the text box depends on the size of the font, e.g.12 is 72	
+	text .scan_card \
+		-font "TkTextFont 12" \
+		-spacing1 20 \
+		-spacing2 2 \
+		-state normal \
+		-wrap word
+		
+	# set the width of the text
+	.scan_card configure -width [expr int($screen_width / [font measure [.scan_card cget -font] 0])]
+	
+	# set the selectbackground to the normal background
+	.scan_card configure -selectbackground [.card_list cget -background]
+	
+	# set up some tags for the text field '.scab_card'
+	.scan_card tag configure center -justify center
+	
+	bind .scan_card <ButtonRelease-1> {
+		if {$scanner == ""} {
+			puts $debug "Button 1 released at %y"
+			set index [.scan_card index @%x,%y]
+			set line [expr int($index)]
+			set scanner [.scan_card get -displaychars $line.0 $line.end]
+			puts $debug "ButtonRelease on .scan_card - index is $index, line is $line, cardname is $cardname, scanner is $scanner"
+		}
+	}
+
+frame .show_card
+
+	# the width of the text box depends on the size of the font, e.g.12 is 72	
+	text .card \
+		-font "TkTextFont 20" \
+		-spacing1 5 \
+		-spacing2 2 \
+		-state normal \
+		-wrap word
+		
+	# set the width of the text
+	.card configure -width [expr int($screen_width / [font measure [.card cget -font] 0])]
+	
+	# set the selectbackground to the normal background
+	.card configure -selectbackground [.card cget -background]
+	
+	# set up some tags for the text field '.card'
+	.card tag configure center -justify center
+		
+# Geometry management
+
+grid .header -in . -row 1 -column 1 \
+	-columnspan 3
+grid .add -in . -row 2 -column 1  \
+	-sticky w
+grid .message -in . -row 2 -column 2 \
+	-sticky we
+grid .delete -in . -row 2 -column 3  \
+	-sticky e
+grid .add_label -in . -row 3 -column 1 
+grid .delete_label -in . -row 3 -column 3
+
+# the .show_card frame
+
+grid .card -in .show_card -row 1 -column 1 \
+	-columnspan 2
+
+grid columnconfigure . 1 -weight 0 -minsize 0 -pad 0
+grid columnconfigure . 2 -weight 1 -minsize 0 -pad 0
+grid columnconfigure . 3 -weight 0 -minsize 0 -pad 0
+grid rowconfigure . 1 -weight 0 -minsize 0 -pad 0
+grid rowconfigure . 2 -weight 0 -minsize 0 -pad 0
+grid rowconfigure . 3 -weight 0 -minsize 0 -pad 0
+grid rowconfigure . 4 -weight 1 -minsize 0 -pad 0
+
+# grid settings for each frame
+
+grid columnconfigure .cards 1 -weight 0 -minsize 0 -pad 0
+grid rowconfigure .cards 1 -weight 1 -minsize 0 -pad 0
+grid rowconfigure .cards 2 -weight 0 -minsize 0 -pad 0
+
+grid columnconfigure .files 1 -weight 0 -minsize 0 -pad 0
+grid rowconfigure .files 1 -weight 1 -minsize 0 -pad 0
+grid rowconfigure .files 2 -weight 0 -minsize 0 -pad 0
+
+
+grid columnconfigure .add_card 1 -weight 0 -minsize 0 -pad 0
+grid columnconfigure .add_card 2 -weight 0 -minsize 0 -pad 0
+grid rowconfigure .add_card 1 -weight 0 -minsize 0 -pad 0
+grid rowconfigure .add_card 2 -weight 0 -minsize 0 -pad 0
+grid rowconfigure .add_card 3 -weight 0 -minsize 0 -pad 0
+grid rowconfigure .add_card 4 -weight 0 -minsize 0 -pad 0
+
+grid columnconfigure .scanner 1 -weight 0 -minsize 0 -pad 0
+grid rowconfigure .scanner 1 -weight 0 -minsize 0 -pad 0
+
+grid columnconfigure .show_card 1 -weight 0 -minsize 0 -pad 0
+grid rowconfigure .show_card 1 -weight 0 -minsize 0 -pad 0
+
+puts $debug "Start completed"
+
+read_card_list
+show_card_list
