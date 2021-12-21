@@ -5,7 +5,7 @@ Store Cards is built using Tcl/TK and Zint
 The aim is to keep all your store cards on your linux phone.
 
 ## Requirements
-The only dependencies tcl, tk and zint.
+The only dependencies are tcl, tk and zint.
 
 ## Optional Dependencies
 Sane and Imagemagick to allow scanning of Store Cards and conversion of image types.
