@@ -5,8 +5,8 @@ exec wish "$0" -- "$@"
 
 # set up storecards
 
-# install the storecards programme to $program_dir
-# install the icon set to $program_dir/icons/storecards
+# install the storecards programme to /usr/bin
+# install the icon set to /usr/share/pixmaps/storecards
 # install the basic card set to ~/.local/share/storecards
 # install a desktop file to ~/.local/share/applications
 
@@ -45,7 +45,7 @@ set debug [open $home/storecards.debug w]
 set delete false
 set delete_text ""
 set filename ""
-set icon_dir "$program_dir/icons/storecards"
+set icon_dir "/usr/share/pixmaps/storecards"
 # is this a mobile device
 if {[catch {exec  ps -el | grep phosh}]} {
 	set mobile false
