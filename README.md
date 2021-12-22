@@ -9,7 +9,9 @@ The only dependencies are tcl, tk and zint.
 
 ## Optional Dependencies
 Sane to allow scanning of Store Cards
+
 Imagemagick to read and convert different image types.
+
 Pinephone-Toolkit(pptk) to raise the backlight for easy scanning of barcodes (AUR or https://github.com/Dejvino/pinephone-toolkit)
 
 ## Installaton
@@ -17,8 +19,11 @@ Pinephone-Toolkit(pptk) to raise the backlight for easy scanning of barcodes (AU
 There is no installation script yet so:
 
 Copy storecards to /usr/bin
+
 Copy the icons to /usr/share/pixmaps/storecards
+
 Copy the data files to ~/.local/share/storecards
+
 Copy the desktop file to ~/.local/share/applications
 
 
