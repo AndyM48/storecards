@@ -8,7 +8,9 @@ The aim is to keep all your store cards on your linux phone.
 The only dependencies are tcl, tk and zint.
 
 ## Optional Dependencies
-Sane and Imagemagick to allow scanning of Store Cards and conversion of image types.
+Sane to allow scanning of Store Cards
+Imagemagick to read and convert different image types.
+Pinephone-Toolkit(pptk) to raise the backlight for easy scanning of barcodes (AUR or https://github.com/Dejvino/pinephone-toolkit)
 
 ## Installaton
 

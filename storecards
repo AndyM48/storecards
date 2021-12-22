@@ -2,6 +2,20 @@
 # the next line restarts using wish \
 exec wish "$0" -- "$@"
 
+#    Copyright (C) 2018 - 2022  Andrew Myers <andrew dot myers@wanadoo dot fr>
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # set up storecards
 
@@ -12,7 +26,7 @@ exec wish "$0" -- "$@"
 
 # declarations
 
-global add_text barcode cardcode card_dir card_list cardname cardfile cardback code colours debug delete delete_text filename home icon_dir magick mobile name program_dir scan scan_side scanner screen_width selected
+global add_text backlight backlight_max backlight_now barcode cardcode card_dir card_list cardname cardfile cardback code colours debug delete delete_text filename home icon_dir magick mobile name program_dir scan scan_side scanner screen_width selected
 
 # set directories
 
@@ -29,6 +43,14 @@ if {[file exists "$card_dir/card_list"] == 0} {
 }
 
 set add_text ""
+set backlight false
+set backlight-now 0
+set backlight-max 0
+if {[catch {exec which pptk-backlight}] == 0} {
+	set backlight true
+	set backlight_now [exec pptk-backlight get]
+	set backlight_max [exec cat /sys/class/backlight/backlight/max_brightness]
+}
 set barcode false
 set cardname ""
 set cardcode ""
@@ -75,6 +97,7 @@ foreach programme $required {
 	}
 }
 
+puts $debug "Backlight is $backlight, Backlight Current is $backlight-now, Backlight Max is $backlight-max"
 # PROCEDURES
 
 # CONFIGURATION OPTIONS
@@ -363,7 +386,7 @@ global debug
 
 proc set_buttons {process} {
 	
-global add_text bardcode card_dir card_list cardback cardcode cardfile cardname colours debug delete_text directory filenme front back
+global add_text backlight backlight_now backlight_max bardcode card_dir card_list cardback cardcode cardfile cardname colours debug delete_text directory filenme front back
 	
 	puts $debug "set_buttons called for $process"
 	if {$process == "add"} {
@@ -412,6 +435,7 @@ global add_text bardcode card_dir card_list cardback cardcode cardfile cardname 
 		
 		# set the .add command
 		.add configure -command {
+			if {$backlight} {exec pptk-backlight set $backlight_now}
 			set cardname ""
 			grid forget .show_card
 			show_card_list
@@ -420,6 +444,7 @@ global add_text bardcode card_dir card_list cardback cardcode cardfile cardname 
 		
 		# set the .delete command
 		.delete configure -command {
+			if {$backlight} {exec pptk-backlight set $backlight_now}
 			set cardname ""
 			grid forget .show_card
 			show_card_list
@@ -843,7 +868,7 @@ global add_text card_dir card_list debug delete_text scanner
 
 proc show_card {cardname} {
 
-global add_text card_dir debug delete_text
+global add_text backlight backlight_now backlight_max card_dir debug delete_text
 
 	# remove the .cards frame
 	grid forget .cards
@@ -905,7 +930,13 @@ global add_text card_dir debug delete_text
 		# add the image of the back of the card
 		image create photo ${cardname}_back -file "$card_dir/${cardname}_back.png"
 		.card image create 5.end -image ${cardname}_back -padx 30
-	}	
+	}
+	
+	# set the backlight to max
+	if {$backlight} {
+		set backlight_now [exec pptk-backlight get]
+		exec pptk-backlight set $backlight_max
+	}
 	
 	# disable the widget
 	.card configure -state disabled
