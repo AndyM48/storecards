@@ -22,7 +22,7 @@ exec wish "$0" -- "$@"
 # install the storecards programme to /usr/bin
 # install the icon set to /usr/share/pixmaps/storecards
 # install the basic card set to ~/.local/share/storecards
-# install a desktop file to ~/.local/share/applications
+# install the desktop file to ~/.local/share/applications
 
 # declarations
 
@@ -50,6 +50,7 @@ if {[catch {exec which pptk-backlight}] == 0} {
 	set backlight true
 	set backlight_now [exec pptk-backlight get]
 	set backlight_max [exec cat /sys/class/backlight/backlight/max_brightness]
+	puts $debug "Backlight is $backlight, Backlight Current is $backlight-now, Backlight Max is $backlight-max"
 }
 set barcode false
 set cardname ""
@@ -58,12 +59,7 @@ set cardfile ""
 set cardback ""
 
 set colours [list black blue gold green red white]
-
-# set debug
-
-#set debug stdout
-set debug [open $home/storecards.debug w]
-
+set debug stdout
 set delete false
 set delete_text ""
 set filename ""
@@ -71,6 +67,8 @@ set icon_dir "/usr/share/pixmaps/storecards"
 # is this a mobile device
 if {[catch {exec  ps -el | grep phosh}]} {
 	set mobile false
+#### for non mobile devices set debug to file
+	set debug [open $home/storecards.debug w]
 } else {
 	set mobile true
 }
@@ -86,8 +84,6 @@ set magick false
 if {[catch {exec which magick}] == 0} {set magick true}
 
 # check for required programmes
-#### ? zint prison barcode?
-
 set required "zint"
 foreach programme $required {
 	set result [catch {exec which $programme}]
@@ -97,7 +93,6 @@ foreach programme $required {
 	}
 }
 
-puts $debug "Backlight is $backlight, Backlight Current is $backlight-now, Backlight Max is $backlight-max"
 # PROCEDURES
 
 # CONFIGURATION OPTIONS
@@ -172,14 +167,6 @@ global add_text barcode cardcode card_dir card_list cardname cardfile cardback d
 	}
 	
 	set_buttons add
-
-####	
-#	# raise the squeekboard
-	
-#	if {$mobile} {
-#		exec busctl call --user sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 SetVisible b true
-#	}
-####
 	
 	focus .add_name_entry
 	
@@ -605,6 +592,9 @@ global card_dir debug directory magick
 
 	# get the list of files in the current directory
 	set dirlist [lsort [glob -directory $directory -nocomplain -tails -types {d r x} *]]
+	
+	# may be add svg files
+
 	if {$magick} {
 		set filelist [lsort [glob -directory $directory -nocomplain -tails *.jpg *.jpeg *.pdf *.png *.pnm]]
 	} else {
@@ -627,6 +617,7 @@ global card_dir debug directory magick
 	foreach file $filelist {
 		if {$file == ""} {continue}
 		# if the extension is not .png then use magick to create an icon from the png image
+		# for svg files try "magick +antialias image.svg -channel RGB result.png" or "magick image.svg -channel RGB -threshold 50% result.png"
 		if {[file extension $file] != ".png"} {
 			exec magick "$directory/$file" "$directory/magick_[file rootname $file].png"
 			image create photo ${file}_card -file "$directory//magick_[file rootname $file].png"
