@@ -14,7 +14,7 @@ case $ans in
 		echo ""
 	;;
 
-	*)	echo "echo "Data saved ($path/storecards)"
+	*)	echo "Data saved ($path/storecards)"
 		echo ""
 	;;
 esac
