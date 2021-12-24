@@ -8,7 +8,7 @@ The aim is to keep all your store cards on your linux phone.
 The only dependencies are tcl, tk and zint.
 
 ## Optional Dependencies
-Sane to allow scanning of Store Cards
+Sane and Imagemagick to allow scanning of Store Cards
 
 Imagemagick to read and convert different image types.
 
@@ -16,15 +16,17 @@ Pinephone-Toolkit(pptk) to raise the backlight for easy scanning of barcodes (AU
 
 ## Installaton
 
-There is no installation script yet so:
+Download the source code and run install.sh to:
 
-Copy storecards to /usr/bin
+	Copy the storecards programme to /usr/bin
 
-Copy the icons to /usr/share/pixmaps/storecards
+	Copy the icons to /usr/share/pixmaps/storecards
 
-Copy the data files to ~/.local/share/storecards
+	Copy the sample data files to ~/.local/share/storecards
 
-Copy the desktop file to ~/.local/share/applications
+	Copy the desktop file to ~/.local/share/applications
+
+To uninstall Store Cards run uninstall.sh from the downloads directory.
 
 
 
