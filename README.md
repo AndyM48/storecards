@@ -22,9 +22,9 @@ Download the source code and run install.sh to:
 
 	Copy the icons to /usr/share/pixmaps/storecards
 
-	Copy the sample data files to ~/.local/share/storecards
+	Copy the desktop file to /usr/share/applications
 
-	Copy the desktop file to ~/.local/share/applications
+	Copy the sample data files to ~/.local/share/storecards
 
 To uninstall Store Cards run uninstall.sh from the downloads directory.
 

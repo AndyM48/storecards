@@ -2,6 +2,7 @@
 
 sudo rm /usr/bin/storecards
 sudo rm -rf /usr/share/pixmaps/storecards
+sudo rm  /usr/share/applications/storecards.desktop"
 echo -n "Do you want to remove the Store Cards data? (y/N) "
 read -n1 ans
 echo ""
@@ -14,12 +15,10 @@ case $ans in
 		echo ""
 	;;
 
-	*)	echo "echo "Data saved ($path/storecards)"
+	*)	echo "Data saved ($path/storecards)"
 		echo ""
 	;;
 esac
-
-rm  "$path/applications/storecards.desktop"
 
 echo "To reinstall storecards download the source from https://github.com/fdservices/storecards/ and run install.sh"
 echo ""
