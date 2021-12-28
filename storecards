@@ -50,7 +50,6 @@ if {[catch {exec which pptk-backlight}] == 0} {
 	set backlight true
 	set backlight_now [exec pptk-backlight get]
 	set backlight_max [exec cat /sys/class/backlight/backlight/max_brightness]
-	puts $debug "Backlight is $backlight, Backlight Current is $backlight-now, Backlight Max is $backlight-max"
 }
 set barcode false
 set cardname ""
@@ -213,7 +212,14 @@ global add_text barcode cardcode card_dir card_list cardname cardfile cardback d
 							# if the extension is not .png then magick must be installed, so change the image type
 							if {[file extension $cardfile] != ".png"} {
 								puts $debug "add_card - $cardfile is not a png image so convert it"
-								exec magick $cardfile "[file rootname $cardfile].png"
+								if {[file extension $cardfile] == ".svg"} {
+									#### resize svg to 159x159, the y dimension of a card, really should find the dimensionsof the image in case it is not square
+									####set dim [split [exec identify  -format "%w %h\n" "$cardfile"] " "]
+									####puts $debug "Dimensions of $cardfile are $dim"
+									exec magick -background none "$cardfile" -resize 159x159 "[file rootname $cardfile].png"
+								} else {
+									exec magick "$cardfile" "[file rootname $cardfile].png"
+								}
 								set cardfile "[file rootname $cardfile].png"
 							}
 							puts $debug "add_card - $cardfile selected"
@@ -237,7 +243,14 @@ global add_text barcode cardcode card_dir card_list cardname cardfile cardback d
 							# if the extension is not .png then magick must be installed, so change the image type
 							if {[file extension $cardback] != ".png"} {
 								puts $debug "add_card - $cardback is not a png image so convert it"
-								exec magick $cardback "[file rootname $cardback].png"
+								if {[file extension $cardback] == ".svg"} {
+									#### resize svg to 159x159, the y dimension of a card, really should find the size of the image in case it is not square
+									####set dim [split [exec identify  -format "%w %h\n" "$cardback"] " "]
+									####puts $debug "Dimensions of $cardback are $dim"
+									exec magick -background none "$cardback" -resize 159x159 "[file rootname $cardback].png"
+								} else {
+									exec magick "$cardback" "[file rootname $cardback].png"
+								}
 								set cardback "[file rootname $cardback].png"
 							}
 							puts $debug "add_card - $cardback selected"
@@ -586,6 +599,10 @@ global add_text card_dir card_list cardname colours debug delete_text front back
 proc get_file_list {} {
 	
 global card_dir debug directory magick
+
+	# make a temporary directory
+	set tmp_dir "/tmp/storecards"
+	file mkdir $tmp_dir
 	
 	# make sure than the .file_list is empty
 	.file_list delete 0.0 end
@@ -593,10 +610,8 @@ global card_dir debug directory magick
 	# get the list of files in the current directory
 	set dirlist [lsort [glob -directory $directory -nocomplain -tails -types {d r x} *]]
 	
-	# may be add svg files
-
 	if {$magick} {
-		set filelist [lsort [glob -directory $directory -nocomplain -tails *.jpg *.jpeg *.pdf *.png *.pnm]]
+		set filelist [lsort [glob -directory $directory -nocomplain -tails *.jpg *.jpeg *.svg *.pdf *.png *.pnm]]
 	} else {
 		set filelist [lsort [glob -directory $directory -nocomplain -tails *.png]]
 	}
@@ -617,10 +632,17 @@ global card_dir debug directory magick
 	foreach file $filelist {
 		if {$file == ""} {continue}
 		# if the extension is not .png then use magick to create an icon from the png image
-		# for svg files try "magick +antialias image.svg -channel RGB result.png" or "magick image.svg -channel RGB -threshold 50% result.png"
 		if {[file extension $file] != ".png"} {
-			exec magick "$directory/$file" "$directory/magick_[file rootname $file].png"
-			image create photo ${file}_card -file "$directory//magick_[file rootname $file].png"
+			if {[file extension $file] == ".svg"} {
+				# resize the image to 254x254 so that the icon will be sampled correctly to 42x42.
+				#### really should find the dimensions of the svg in case it is not square
+				####set dim [split [exec identify -format "%w %h\n" "$directory/$file"] " "]
+				####puts $debug "Dimensions of $directory/$file are $dim"
+				exec magick -background none "$directory/$file" -resize 254x254 "$tmp_dir/[file rootname $file].png"
+			} else {
+				exec magick "$directory/$file" "$tmp_dir/[file rootname $file].png"
+			}
+			image create photo ${file}_card -file "$tmp_dir/[file rootname $file].png"
 		} else {
 			image create photo ${file}_card -file "$directory/$file"
 		}
@@ -628,8 +650,8 @@ global card_dir debug directory magick
 		${file}_icon copy ${file}_card -subsample 6
 		.file_list image create end -image ${file}_icon -padx 20
 		.file_list insert end "$file\n"
-		file delete "$directory/magick*"
 	}
+	file delete -force $tmp_dir
 }
 
 proc show_file_list {} {
@@ -957,7 +979,7 @@ puts $debug "get_configs returned card_dir \"$card_dir\" icon_dir \"$icon_dir\" 
 
 puts $debug "Create images"
 
-# The store card dafault images are 254x159, transparent background, rounded rectamgle - corners 35, text sans 25 bold.
+# The store card default images are 254x159, transparent background, rounded rectangle - corners 35, text sans 25 bold.
 # The store card list icons are 1/4th size.
 # The store card file icons are 1/6th size and the standard file icons (below are 42x42
 
