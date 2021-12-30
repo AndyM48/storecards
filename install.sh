@@ -8,4 +8,6 @@ sudo cp storecards.desktop /usr/share/applications
 mkdir -p ~/.local/share/storecards
 cp data/* ~/.local/share/storecards
 
-echo "Install done"
+echo '
+Install done
+'

@@ -21,12 +21,12 @@ exec wish "$0" -- "$@"
 
 # install the storecards programme to /usr/bin
 # install the icon set to /usr/share/pixmaps/storecards
+# install the desktop file to /usr/share/applications
 # install the basic card set to ~/.local/share/storecards
-# install the desktop file to ~/.local/share/applications
 
 # declarations
 
-global add_text backlight backlight_max backlight_now barcode cardcode card_dir card_list cardname cardfile cardback code colours debug delete delete_text filename home icon_dir magick mobile name program_dir scan scan_side scanner screen_width selected
+global add_text backlight backlight_max backlight_now barcode cardcode card_dir card_list cardname cardfile cardback code colours debug delete delete_text filename home icon_dir magick mobile name program_dir scan scan_side scanner screen_width selected tmp_dir
 
 # set directories
 
@@ -41,7 +41,10 @@ if {[file exists "$card_dir/card_list"] == 0} {
 	set fid [open "$card_dir/card_list" w]
 	close $fid
 }
-
+# make a temporary directory
+set tmp_dir "/tmp/storecards"
+file mkdir $tmp_dir
+	
 set add_text ""
 set backlight false
 set backlight-now 0
@@ -66,7 +69,7 @@ set icon_dir "/usr/share/pixmaps/storecards"
 # is this a mobile device
 if {[catch {exec  ps -el | grep phosh}]} {
 	set mobile false
-#### for non mobile devices set debug to file
+	# for non mobile devices set debug to file
 	set debug [open $home/storecards.debug w]
 } else {
 	set mobile true
@@ -160,6 +163,7 @@ global add_text barcode cardcode card_dir card_list cardname cardfile cardback d
 		
 	# make sure that the widget is empty
 	.add_card_data delete 1.0 end
+	
 	# make sure there are at least 5 line in the widget
 	for {set line 1} {$line <= 5} {incr line} {
 		.add_card_data insert end "\n"
@@ -208,19 +212,21 @@ global add_text barcode cardcode card_dir card_list cardname cardfile cardback d
 						set_buttons add
 						
 						puts $debug ".add_card - select returned $cardfile"
+
 						if {$cardfile != ""} {
 							# if the extension is not .png then magick must be installed, so change the image type
 							if {[file extension $cardfile] != ".png"} {
 								puts $debug "add_card - $cardfile is not a png image so convert it"
-								if {[file extension $cardfile] == ".svg"} {
-									#### resize svg to 159x159, the y dimension of a card, really should find the dimensionsof the image in case it is not square
-									####set dim [split [exec identify  -format "%w %h\n" "$cardfile"] " "]
-									####puts $debug "Dimensions of $cardfile are $dim"
-									exec magick -background none "$cardfile" -resize 159x159 "[file rootname $cardfile].png"
+								if {[file extension $cardfile] == ".svg" || [file extension $cardfile] == ".svgz"} {
+									#### resize svg to 159x159. Assumes that all svg images are square.
+									#### really should find the dimensions of the image in case it is not.
+									#### set dim [split [exec identify  -format "%w %h\n" "$cardfile"] " "]
+									#### puts $debug "Dimensions of $cardfile are $dim"
+									exec magick -background none "$cardfile" -resize 159x159 "$tmp_dir/[file tail [file rootname $cardfile].png]"
 								} else {
-									exec magick "$cardfile" "[file rootname $cardfile].png"
+									exec magick "$cardfile" "$tmp_dir/[file tail [file rootname $cardfile].png]"
 								}
-								set cardfile "[file rootname $cardfile].png"
+								set cardfile "$tmp_dir/[file tail [file rootname $cardfile].png]"
 							}
 							puts $debug "add_card - $cardfile selected"
 							image create photo ${cardname}_card -file "$cardfile"
@@ -243,15 +249,16 @@ global add_text barcode cardcode card_dir card_list cardname cardfile cardback d
 							# if the extension is not .png then magick must be installed, so change the image type
 							if {[file extension $cardback] != ".png"} {
 								puts $debug "add_card - $cardback is not a png image so convert it"
-								if {[file extension $cardback] == ".svg"} {
-									#### resize svg to 159x159, the y dimension of a card, really should find the size of the image in case it is not square
-									####set dim [split [exec identify  -format "%w %h\n" "$cardback"] " "]
-									####puts $debug "Dimensions of $cardback are $dim"
-									exec magick -background none "$cardback" -resize 159x159 "[file rootname $cardback].png"
+								if {[file extension $cardback] == ".svg" || [file extension $cardback] == ".svgz"} {
+									#### resize svg to 159x159. Assumes that all svg images are square.
+									#### really should find the dimensions of the image in case it is not.
+									#### set dim [split [exec identify  -format "%w %h\n" "$cardfile"] " "]
+									#### puts $debug "Dimensions of $cardfile are $dim"
+									exec magick -background none "$cardback" -resize 159x159 "$tmp_dir/[file tail [file rootname $cardback].png]"
 								} else {
-									exec magick "$cardback" "[file rootname $cardback].png"
+									exec magick "$cardback" "$tmp_dir/[file tail [file rootname $cardback].png]"
 								}
-								set cardback "[file rootname $cardback].png"
+								set cardback "$tmp_dir/[file tail [file rootname $cardback].png]"
 							}
 							puts $debug "add_card - $cardback selected"
 							image create photo ${cardname}_back -file "$cardback"
@@ -364,15 +371,38 @@ global debug
 	switch $set {
 		on {
 			switch $window {
+				.add_card_data {
+					bind .add_card_data <Motion> {
+						puts $debug ".add_card_data scan dragto %x %y"
+						.add_card_data scan dragto %x %y
+						break
+					}
+				}
+				.card {
+					bind .card <Motion> {
+						puts $debug ".card scan dragto %x %y"
+						.card scan dragto %x %y
+						break
+					}
+				}
 				.card_list {
 					bind .card_list <Motion> {
+						puts $debug ".card_list scan dragto %x %y"
 						.card_list scan dragto %x %y
 						break
 					}
 				}
 				.file_list {
 					bind .file_list <Motion> {
+						puts $debug "file_list scan dragto %x %y"
 						.file_list scan dragto %x %y
+						break
+					}
+				}
+				.scan_card {
+					bind .scan_card <Motion> {
+						puts $debug ".scan_card scan dragto %x %y"
+						.scan_card scan dragto %x %y
 						break
 					}
 				}
@@ -419,6 +449,8 @@ global add_text backlight backlight_now backlight_max bardcode card_dir card_lis
 				# remove the .add_card frame
 				grid forget .add_card
 				
+				.message configure -text ""
+				
 				show_card_list
 			}
 		}
@@ -427,6 +459,7 @@ global add_text backlight backlight_now backlight_max bardcode card_dir card_lis
 		# set the .delete command
 		.delete configure -command {
 			grid forget .add_card
+			.message configure -text ""
 			show_card_list
 		}
 		set delete_text "CANCEL"
@@ -440,7 +473,7 @@ global add_text backlight backlight_now backlight_max bardcode card_dir card_lis
 			grid forget .show_card
 			show_card_list
 		}
-		set add_text "LIST"
+		set add_text "CANCEL"
 		
 		# set the .delete command
 		.delete configure -command {
@@ -449,14 +482,42 @@ global add_text backlight backlight_now backlight_max bardcode card_dir card_lis
 			grid forget .show_card
 			show_card_list
 		}	
-		set delete_text "LIST"
+		set delete_text "CANCEL"
+
+	} elseif {$process == "show_files"} {
 		
-	} elseif {$process == "files"} {
+		# set the .add command
+		.add configure -command {
+			set directory "[string trimright [string range $directory 0 [string last "/" $directory]] "/"]"
+			if {$directory == ""} {set directory "/"}
+			if {[string first "//" $directory] == 0} {set directory [string range $directory 1 end]}
+			# set the state for .file_list
+			.file_list configure -state normal
+			
+			get_file_list
+			
+			# set the state for .file_list
+			.file_list configure -state disabled
+		}
+		set add_text "UP"
+		
+		# set the .delete command
+		.delete configure -command {
+			set filename ""
+			.message configure -text ""
+			# remove the .files frame
+			grid forget .files
+			set selected ""
+		}
+		set delete_text "CANCEL"
+				
+	} elseif {$process == "add_file"} {
 		
 		# set the .add command
 		.add configure -command {
 			# remove the .files frame
 			grid forget .files
+			.message configure -text ""
 			set selected "$directory/$filename"
 		}
 		set add_text "SELECT"
@@ -466,6 +527,7 @@ global add_text backlight backlight_now backlight_max bardcode card_dir card_lis
 			set filename ""
 			# remove the .files frame
 			grid forget .files
+			.message configure -text ""
 			set selected ""
 		}
 		set delete_text "CANCEL"
@@ -598,24 +660,23 @@ global add_text card_dir card_list cardname colours debug delete_text front back
 
 proc get_file_list {} {
 	
-global card_dir debug directory magick
+global card_dir debug directory magick tmp_dir
 
-	# make a temporary directory
-	set tmp_dir "/tmp/storecards"
-	file mkdir $tmp_dir
+	puts $debug "get_file_list called - directory is \"$directory\""
 	
 	# make sure than the .file_list is empty
 	.file_list delete 0.0 end
-
-	# get the list of files in the current directory
+	
+	# get the list of files in the current directory {d r x}
 	set dirlist [lsort [glob -directory $directory -nocomplain -tails -types {d r x} *]]
 	
 	if {$magick} {
-		set filelist [lsort [glob -directory $directory -nocomplain -tails *.jpg *.jpeg *.svg *.pdf *.png *.pnm]]
+		set filelist [lsort [glob -directory $directory -nocomplain -tails *.jpg *.jpeg *.svg *.svgz *.pdf *.png *.pnm]]
 	} else {
 		set filelist [lsort [glob -directory $directory -nocomplain -tails *.png]]
 	}
-	# start with Home, Cards, Previous"
+
+	# start with Home, Root and ?Cards?"
 	.file_list image create end -image home_icon -padx 20
 	.file_list insert end "Home\n"
 	.file_list image create end -image root_icon -padx 20
@@ -632,26 +693,41 @@ global card_dir debug directory magick
 	foreach file $filelist {
 		if {$file == ""} {continue}
 		# if the extension is not .png then use magick to create an icon from the png image
-		if {[file extension $file] != ".png"} {
-			if {[file extension $file] == ".svg"} {
-				# resize the image to 254x254 so that the icon will be sampled correctly to 42x42.
-				#### really should find the dimensions of the svg in case it is not square
-				####set dim [split [exec identify -format "%w %h\n" "$directory/$file"] " "]
-				####puts $debug "Dimensions of $directory/$file are $dim"
-				exec magick -background none "$directory/$file" -resize 254x254 "$tmp_dir/[file rootname $file].png"
+		# unless it is an svg which is way too slow to convert
+		if {[file extension $file] != ".svg" && [file extension $file] != ".svgz"} {
+			if {[file extension $file] == ".png"} {
+				image create photo ${file}_card -file "$directory/$file"
 			} else {
-				exec magick "$directory/$file" "$tmp_dir/[file rootname $file].png"
+				exec magick "$directory/$file" "$tmp_dir/[file tail [file rootname $file].png]"
+				image create photo ${file}_card -file "$tmp_dir/[file tail [file rootname $file].png]"
 			}
-			image create photo ${file}_card -file "$tmp_dir/[file rootname $file].png"
+			image create photo ${file}_icon
+			${file}_icon copy ${file}_card -subsample 6
+			.file_list image create end -image ${file}_icon -padx 20
 		} else {
-			image create photo ${file}_card -file "$directory/$file"
+			.file_list image create end -image svg_icon -padx 20
 		}
-		image create photo ${file}_icon
-		${file}_icon copy ${file}_card -subsample 6
-		.file_list image create end -image ${file}_icon -padx 20
 		.file_list insert end "$file\n"
 	}
-	file delete -force $tmp_dir
+	
+	set first ""
+	set last ""
+	set text $directory
+	puts $debug "The wraplength of .message is [.message cget -wraplength]"
+	puts $debug "The width of the .message font ([.message cget -font]) is [font measure [.message cget -font] 0]"
+	puts $debug "The wraplength in characters of the message widget is [expr int([.message cget -wraplength]/[font measure [.message cget -font] 0])]"
+	set wrap [expr int([.message cget -wraplength]/[font measure [.message cget -font] 0])]
+	if {[string length $text] > $wrap} {
+		set first [string range $text 0 $wrap]
+		set last [string range $text $wrap+1 end]
+		set index [string last "/" $first]
+		if {$index != -1} {
+			set first [string range $text 0 $index]
+			set last [string range $text $index+1 end]
+		}
+		set text "$first\n$last"
+	}
+	.message configure -text "$text"
 }
 
 proc show_file_list {} {
@@ -670,7 +746,7 @@ global add_text card_dir selected debug delete_text filename directory
 	
 	grid .file_list -in .files -row 1 -column 1 
 	
-	set_buttons files
+	set_buttons show_files
 	
 	# set the state for .file_list
 	.file_list configure -state normal
@@ -891,7 +967,8 @@ global add_text backlight backlight_now backlight_max card_dir debug delete_text
 		-columnspan 3 \
 		-sticky we
 		
-		grid .card -in .show_card -row 1 -column 1
+		grid .card -in .show_card -row 1 -column 1 \
+			-sticky nswe
 	
 	# enable the widget
 	.card configure -state normal
@@ -981,15 +1058,16 @@ puts $debug "Create images"
 
 # The store card default images are 254x159, transparent background, rounded rectangle - corners 35, text sans 25 bold.
 # The store card list icons are 1/4th size.
-# The store card file icons are 1/6th size and the standard file icons (below are 42x42
+# The store card file icons are 1/6th size and the standard file icons (below) are 42x42
 
 image create photo add -file "$icon_dir/add.png"
 image create photo delete -file "$icon_dir/remove.png"
 image create photo scan -file "$icon_dir/scan.png"
 # folder icons
 image create photo dir_icon -file "$icon_dir/folder-blue.png"
-image create photo root_icon -file "$icon_dir/folder-red.png"
 image create photo home_icon -file "$icon_dir/go-home.png"
+image create photo root_icon -file "$icon_dir/folder-red.png"
+image create photo svg_icon -file "$icon_dir/svg-icon.png"
 
 # WINDOWS
 
@@ -997,28 +1075,33 @@ puts $debug "Set up windows"
 
 # Main window
 
-# there may be a problem setting the width of the text widgets
-# it seems that they will be set to the screen width if no other width is specified
-# we need to test this now on the pinephone 
+# there is a problem setting the width of the text widgets, they will be set to the screen width if no other width is specified
 # the pinephone screen is 720x1368+0+32 which is actually double its true geometry of 360x648+0+32
-# hopefully this will be suitable to reflect other phones
-# if it runs with any geometry being specified, on the phone, then we can leave the geometry blank 
-# or set it for a computer instead of phosh (set error [pgrep phosh], 0 true, 1 false)
+# this will not necessarily be suitable to reflect other phones.
+# we do know the screen width and height so we can use these to calculate the geometry to use for the phone.
+# also we can use the screen width, and the width of the zero character of the font used in the widget, to set the width of the text widgets.
+# to set it for a computer instead of phosh simply use the pinephone geometry to simulate the phone screen.
+
+# the result will work best in portrait mode, and not so well in landscape mode, but rotating the screen is not supported.
 
 if {$mobile} {
+	puts $debug "Screen width set to [winfo vrootwidth .]"
+	puts $debug "Geomtry set to [winfo vrootwidth .]x[winfo vrootheight .]+0+32"
 	set screen_width [winfo vrootwidth .]
 	wm geometry . "[winfo vrootwidth .]x[winfo vrootheight .]+0+32"
 } else {
-	#set screen_width 720
-	#wm geometry . 720x1368+0+32
-	# this geometry mimicks the pinephone screen
+	# this geometry mimicks the pinephone screen in portrait mode	
 	set screen_width 360
 	wm geometry . 360x684+200+32
+	# this geometry mimicks the pinephone screen in landscape mode	
+	#set screen_width 684
+	#wm geometry . 684x360+200+32
 }
 
 wm protocol . WM_DELETE_WINDOW {
 	puts $debug "Exit called - write card_list"
 	write_card_list
+	file delete -force "/tmp/storecards"
 	.put_configs
 	exit
 }
@@ -1125,9 +1208,6 @@ frame .files
 	# set the selectbackground to the normal background
 	.file_list configure -selectbackground [.file_list cget -background]
 	
-	# hide the cursor
-	#.file_list configure -cursor "hand1 [.file_list cget -bg] [.file_list cget -bg]" \
-		
 	bind .file_list <ButtonPress-1> {
 		set markrow %y
 		puts $debug "Button 1 pressed at %y"
@@ -1149,7 +1229,8 @@ frame .files
 			if {$filename != ""} {
 				set filename ""
 				# don't throw an error if the tags have already been deleted
-				catch {.file_list tag remove highlight highlight.first highlight.last}					
+				catch {.file_list tag remove highlight highlight.first highlight.last}	
+				set_buttons show_files				
 			} 
 			puts $debug "Filename is blank - set filename"
 			set filename [.file_list get -displaychars $line.0 $line.end]
@@ -1167,11 +1248,13 @@ frame .files
 				set filename ""
 			} elseif {[file isdirectory "$directory/$filename"]} {
 				set directory "$directory/$filename"
+				if {[string first "//" $directory] == 0} {set directory [string range $directory 1 end]}
 				get_file_list				
 				set filename ""
 			} else {
 				# highlight the line
 				.file_list tag add highlight $line.0 $line.end 
+				set_buttons add_file
 			}
 			# set the state for .file_list
 			.file_list configure -state disabled
@@ -1298,11 +1381,19 @@ frame .add_card
 		-state normal \
 		-wrap word
 		
+	bind .add_card_data <ButtonPress-1> {
+		puts $debug "Button 1 pressed at %y"
+		.add_card_data scan mark %x %y
+		scroll_text .add_card_data on
+	}
+	bind .add_card_data <ButtonRelease-1> {
+		puts $debug "Button 1 released at %y"
+		scroll_text .add_card_data off
+	}
+		
 	# set the width of the text
 	.add_card_data configure -width [expr int($screen_width / [font measure [.add_card_data cget -font] 0])]
-
-	# set the selectbackground to the normal background
-	.add_card_data configure -selectbackground [.add_card_data cget -background]
+	
 	# make sure there are at least 5 line in the widget
 	for {set line 1} {$line <= 5} {incr line} {
 		.add_card_data insert end "\n"
@@ -1331,13 +1422,24 @@ frame .scanner
 		-state normal \
 		-wrap word
 		
+	bind .scan_card <ButtonPress-1> {
+		set markrow %y
+		puts $debug "Button 1 pressed at %y"
+		.scan_card scan mark %x %y
+		scroll_text .scan_card on
+	}
+	bind .scan_card <ButtonRelease-1> {
+		puts $debug "Button 1 released at %y"
+		scroll_text .scan_card off
+	}
+		
 	# set the width of the text
 	.scan_card configure -width [expr int($screen_width / [font measure [.scan_card cget -font] 0])]
 	
 	# set the selectbackground to the normal background
 	.scan_card configure -selectbackground [.card_list cget -background]
 	
-	# set up some tags for the text field '.scab_card'
+	# set up some tags for the text field '.scan_card'
 	.scan_card tag configure center -justify center
 	
 	bind .scan_card <ButtonRelease-1> {
@@ -1358,7 +1460,18 @@ frame .show_card
 		-spacing1 5 \
 		-spacing2 2 \
 		-state normal \
-		-wrap word
+		-wrap word 
+		
+	bind .card <ButtonPress-1> {
+		set markrow %y
+		puts $debug "Button 1 pressed at %y"
+		.card scan mark %x %y
+		scroll_text .card on
+	}
+	bind .card <ButtonRelease-1> {
+		puts $debug "Button 1 released at %y"
+		scroll_text .card off
+	}
 		
 	# set the width of the text
 	.card configure -width [expr int($screen_width / [font measure [.card cget -font] 0])]
@@ -1410,14 +1523,16 @@ grid columnconfigure .add_card 1 -weight 0 -minsize 0 -pad 0
 grid columnconfigure .add_card 2 -weight 0 -minsize 0 -pad 0
 grid rowconfigure .add_card 1 -weight 0 -minsize 0 -pad 0
 grid rowconfigure .add_card 2 -weight 0 -minsize 0 -pad 0
-grid rowconfigure .add_card 3 -weight 0 -minsize 0 -pad 0
+grid rowconfigure .add_card 3 -weight 1 -minsize 0 -pad 0
 grid rowconfigure .add_card 4 -weight 0 -minsize 0 -pad 0
 
 grid columnconfigure .scanner 1 -weight 0 -minsize 0 -pad 0
-grid rowconfigure .scanner 1 -weight 0 -minsize 0 -pad 0
+grid rowconfigure .scanner 1 -weight 1 -minsize 0 -pad 0
+grid rowconfigure .scanner 2 -weight 0 -minsize 0 -pad 0
 
 grid columnconfigure .show_card 1 -weight 0 -minsize 0 -pad 0
-grid rowconfigure .show_card 1 -weight 0 -minsize 0 -pad 0
+grid rowconfigure .show_card 1 -weight 1 -minsize 0 -pad 0
+grid rowconfigure .show_card 2 -weight 0 -minsize 0 -pad 0
 
 puts $debug "Start completed"
 
