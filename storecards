@@ -469,11 +469,27 @@ global add_text backlight backlight_now backlight_max bardcode card_dir card_lis
 		# set the .add command
 		.add configure -command {
 			if {$backlight} {exec pptk-backlight set $backlight_now}
+			
+			# now set the card to top of the list
+			set cardname [string tolower $cardname]
+			set cardname [string tolower $cardname]
+			set new_list ""
+			foreach element $card_list {
+				if {$element == ""} {continue}
+				set items [split $element ":"]
+				if {[lindex $items 0] == "$cardname"} {
+					set new_list [linsert $new_list 0 $element]
+					continue
+				}
+				lappend new_list $element
+			}
+			set card_list $new_list
+
 			set cardname ""
 			grid forget .show_card
 			show_card_list
 		}
-		set add_text "CANCEL"
+		set add_text "SET TOP"
 		
 		# set the .delete command
 		.delete configure -command {
@@ -482,7 +498,7 @@ global add_text backlight backlight_now backlight_max bardcode card_dir card_lis
 			grid forget .show_card
 			show_card_list
 		}	
-		set delete_text "CANCEL"
+		set delete_text "BACK"
 
 	} elseif {$process == "show_files"} {
 		
