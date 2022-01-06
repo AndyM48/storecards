@@ -26,8 +26,9 @@ Download the source code and run install.sh to:
 
 	Copy the sample data files to ~/.local/share/storecards
 
+To update downlaod the source code and run install.sh again. all data will be preserved.
+
 To uninstall Store Cards run uninstall.sh from the downloads directory.
 
 
-
-This is alpha software and still in development. If you find it useful, good. If you do not then please file a bug report.
+This is the first release of the software. If you find it useful, good. If you do not then please file a bug report.

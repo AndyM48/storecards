@@ -118,7 +118,6 @@ global card_dir home icon_dir scanner
 			switch -- [lindex $config_option 0] {
 				icon_directory {set icon_dir $var}
 				scanner {set scanner $var}
-				storecard_directory {set card_dir $var}
 			}
 		}
 		close $fid
@@ -131,21 +130,19 @@ global card_dir home icon_dir scanner
 
 	set fid [open "$home/.storecards.config" w ]
 
-	puts $fid "# Configuration options for my tcl/tk storecards programme. Valid format is "
+	puts $fid "# Configuration options for the tcl/tk storecards programme. Valid format is "
 	puts $fid "# variable option_list"
 	puts $fid "# This file will be overwritten when the storecards exits"
 	puts $fid ""
 	puts $fid "icon_directory $icon_dir"
 	puts $fid "scanner $scanner"
-	puts $fid "storecard_directory $card_dir"
-	
 
 	close $fid 
 }
 
 proc add_card {} {
 	
-global add_text barcode cardcode card_dir card_list cardname cardfile cardback debug delete_text mobile scan
+global add_text barcode cardcode card_dir card_list cardname cardfile cardback debug delete_text magick mobile scan
 
 	puts $debug "add_card called"
 	
@@ -219,17 +216,32 @@ global add_text barcode cardcode card_dir card_list cardname cardfile cardback d
 						puts $debug ".add_card - select returned $cardfile"
 
 						if {$cardfile != ""} {
-							# if the extension is not .png then magick must be installed, so change the image type
-							if {[file extension $cardfile] != ".png"} {
-								puts $debug "add_card - $cardfile is not a png image so convert it"
-								if {[file extension $cardfile] == ".svg" || [file extension $cardfile] == ".svgz"} {
-									#### resize svg to 159x159. Assumes that all svg images are square.
-									#### really should find the dimensions of the image in case it is not.
-									#### set dim [split [exec identify  -format "%w %h\n" "$cardfile"] " "]
-									#### puts $debug "Dimensions of $cardfile are $dim"
+							if {$magick} {
+								puts $debug ".add_card - create png image if necessary and resize it"
+								set dim [split [exec identify  -format "%w %h\n" "$cardfile"] " "]
+								puts $debug "Dimensions of $cardfile are $dim"
+								set width [lindex $dim 0]
+								set height [lindex $dim 1]
+								puts $debug "Dimensions of $cardfile are $width x $height"
+								# get the ratio of the image
+								set ratio [expr (round(($width * 10.0) / $height)) / 10.0]
+								puts $debug "Ratio of the image is $ratio"
+								if {$ratio == 1.0} {
+									puts $debug ".add_card - image is square, resize it to 159x159 at \"$tmp_dir/[file tail [file rootname $cardfile].png]\""
 									exec magick -background none "$cardfile" -resize 159x159 "$tmp_dir/[file tail [file rootname $cardfile].png]"
+								} elseif {$ratio == 1.6} {
+									puts $debug ".add_card - image is ratio 1.6, resize it to 254x159 at \"$tmp_dir/[file tail [file rootname $cardfile].png]\""
+									exec magick "$cardfile" -resize 254x159 "$tmp_dir/[file tail [file rootname $cardfile].png]"
+								} elseif {$ratio > 1.6} {
+									set x 254
+									set y [expr int(254 / $ratio)]
+									puts $debug ".add_card - image ratio > 1.6, resize it to ${x}x${y} at \"$tmp_dir/[file tail [file rootname $cardfile].png]\""
+									exec magick -background none "$cardfile" -resize ${x}x$y "$tmp_dir/[file tail [file rootname $cardfile].png]"
 								} else {
-									exec magick "$cardfile" "$tmp_dir/[file tail [file rootname $cardfile].png]"
+									set x [expr int(159 * $ratio)]
+									set y 159
+									puts $debug ".add_card - image ratio < 1.6, resize it to ${x}x${y} at \"$tmp_dir/[file tail [file rootname $cardfile].png]\""
+									exec magick -background none "$cardfile" -resize ${x}x$y "$tmp_dir/[file tail [file rootname $cardfile].png]"
 								}
 								set cardfile "$tmp_dir/[file tail [file rootname $cardfile].png]"
 							}
@@ -251,17 +263,32 @@ global add_text barcode cardcode card_dir card_list cardname cardfile cardback d
 						set_buttons add
 						puts $debug ".add_card - select returned $cardback"
 						if {$cardback != ""} {
-							# if the extension is not .png then magick must be installed, so change the image type
-							if {[file extension $cardback] != ".png"} {
-								puts $debug "add_card - $cardback is not a png image so convert it"
-								if {[file extension $cardback] == ".svg" || [file extension $cardback] == ".svgz"} {
-									#### resize svg to 159x159. Assumes that all svg images are square.
-									#### really should find the dimensions of the image in case it is not.
-									#### set dim [split [exec identify  -format "%w %h\n" "$cardfile"] " "]
-									#### puts $debug "Dimensions of $cardfile are $dim"
+							if {$magick} {
+								puts $debug ".add_card - create png image if necessary and resize it"
+								set dim [split [exec identify  -format "%w %h\n" "$cardback"] " "]
+								puts $debug "Dimensions of $cardback are $dim"
+								set width [lindex $dim 0]
+								set height [lindex $dim 1]
+								puts $debug "Dimensions of $cardback are $width x $height"
+								# get the ratio of the image
+								set ratio [expr (round(($width * 10.0) / $height)) / 10.0]
+								puts $debug "Ratio of the image is $ratio"
+								if {$ratio == 1.0} {
+									puts $debug ".add_card - image is square, resize it to 159x159 at \"$tmp_dir/[file tail [file rootname $cardback].png]\""
 									exec magick -background none "$cardback" -resize 159x159 "$tmp_dir/[file tail [file rootname $cardback].png]"
+								} elseif {$ratio == 1.6} {
+									puts $debug ".add_card - image is ratio 1.6, resize it to 254x159 at \"$tmp_dir/[file tail [file rootname $cardback].png]\""
+									exec magick "$cardback" -resize 254x159 "$tmp_dir/[file tail [file rootname $cardback].png]"
+								} elseif {$ratio > 1.6} {
+									set x 254
+									set y [expr int(254 / $ratio)]
+									puts $debug ".add_card - image ratio > 1.6, resize it to ${x}x${y} at \"$tmp_dir/[file tail [file rootname $cardback].png]\""
+									exec magick -background none "$cardback" -resize ${x}x$y "$tmp_dir/[file tail [file rootname $cardback].png]"
 								} else {
-									exec magick "$cardback" "$tmp_dir/[file tail [file rootname $cardback].png]"
+									set x [expr int(159 * $ratio)]
+									set y 159
+									puts $debug ".add_card - image ratio < 1.6, resize it to ${x}x${y} at \"$tmp_dir/[file tail [file rootname $cardback].png]\""
+									exec magick -background none "$cardback" -resize ${x}x$y "$tmp_dir/[file tail [file rootname $cardback].png]"
 								}
 								set cardback "$tmp_dir/[file tail [file rootname $cardback].png]"
 							}
@@ -1329,12 +1356,12 @@ frame .add_card
 		if {$cardname == ""} {
 			puts $debug ".add_code_entry has no name"
 			# message $cardname must be unique
-			insert_message .add_card_data 1 "Storecard requires a unique card name" 
+			insert_message .add_card_data 1 "Store Cards requires a unique card name" 
 			focus .add_name_entry
 		} elseif {[find_code $cardname] != 1} {
 			puts $debug "add_card - [name_to_caps $cardname] already exists"
 			# message $cardname must be unique
-			insert_message .add_card_data 1 "[name_to_caps $cardname] already exists - Storecard requires a unique card name"
+			insert_message .add_card_data 1 "[name_to_caps $cardname] already exists - Store Cards requires a unique card name"
 			after 2000 {
 				set cardname ""
 				focus .add_name_entry
@@ -1386,7 +1413,8 @@ frame .add_card
 				after 2000 {focus .add_code_entry}
 				after 5000 {insert_message .add_card_data 1 ""}
 			}
-		} else {
+		# otherwise, if we have not set the barcode yet
+		} elseif {!$barcode} {
 			set file "$card_dir/barcode.png"
 			file delete $file
 			set zintcode [string map {" " ""} $cardcode]
