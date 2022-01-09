@@ -1,4 +1,4 @@
-#! /bin/bash
+#! /usr/bin/sh
 
 sudo cp storecards /usr/bin
 sudo chmod 0755 /usr/bin/storecards

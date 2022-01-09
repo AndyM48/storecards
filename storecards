@@ -142,7 +142,7 @@ global card_dir home icon_dir scanner
 
 proc add_card {} {
 	
-global add_text barcode cardcode card_dir card_list cardname cardfile cardback debug delete_text magick mobile scan
+global debug 
 
 	puts $debug "add_card called"
 	
@@ -151,161 +151,144 @@ global add_text barcode cardcode card_dir card_list cardname cardfile cardback d
 		-columnspan 3 \
 		-sticky we
 		
-		grid .add_name_label -in .add_card -row 1 -column 1 
-		grid .add_name_entry -in .add_card -row 1 -column 2
-		grid .add_code_label -in .add_card -row 2 -column 1 
-		grid .add_code_entry -in .add_card -row 2 -column 2
+		grid .add_name_label -in .add_card -row 1 -column 2 
+		grid .add_name_entry -in .add_card -row 1 -column 3
+		grid .add_code_label -in .add_card -row 2 -column 2
+		grid .add_code_entry -in .add_card -row 2 -column 3
 		
-		grid .add_card_data -in .add_card -row 3 -column 1 \
+		grid .add_card_data -in .add_card -row 3 -column 2 \
 			-columnspan 2 \
 			-sticky w
-
-	# enable the widget
-	.add_card_data configure -state normal
-		
-	# make sure that the widget is empty
-	.add_card_data delete 1.0 end
-	
-	# make sure there are at least 5 line in the widget
-	for {set line 1} {$line <= 5} {incr line} {
-		.add_card_data insert end "\n"
-	}
 	
 	set_buttons add
+	
+	.add_card_data configure -state normal
+	.add_card_data delete 1.0 end
 	
 	focus .add_name_entry
 	
 	# now get the name and the code
 
-	tkwait variable barcode
-	
-	if {$barcode != ""} {
-		puts $debug "add_card - barcode has been set"
-		
-		# now insert a message at line 3
-		insert_message .add_card_data 3 "Optionally: either select an image from file or scan the front of the card"
-		puts $debug "Scan or Select message placed in line [.add_card_data count -displaylines 0.0 end]"
-		
-		# if scanning is enabled add a scan button
-		if {$scan} {
-			.add_card_data window create 4.end -create {
-				button .add_scan \
-					-command {
-						scan_card $cardname $cardcode
-					} \
-					-text "Scan"
-			} -padx 20
-		}
-	
-		# in any case add a select button
-		.add_card_data window create 4.end -create {
-			button .add_select \
-				-command {
-					if {$cardfile == ""} {
-						grid remove .add_card
-						show_file_list
-						tkwait variable selected
-						set cardfile $selected
-						set selected ""
-						grid .add_card -in . -row 4 -column 1 \
-							-columnspan 3 \
-							-sticky we
-							
-						set_buttons add
-						
-						puts $debug ".add_card - select returned $cardfile"
-
-						if {$cardfile != ""} {
-							if {$magick} {
-								puts $debug ".add_card - create png image if necessary and resize it"
-								set dim [split [exec identify  -format "%w %h\n" "$cardfile"] " "]
-								puts $debug "Dimensions of $cardfile are $dim"
-								set width [lindex $dim 0]
-								set height [lindex $dim 1]
-								puts $debug "Dimensions of $cardfile are $width x $height"
-								# get the ratio of the image
-								set ratio [expr (round(($width * 10.0) / $height)) / 10.0]
-								puts $debug "Ratio of the image is $ratio"
-								if {$ratio == 1.0} {
-									puts $debug ".add_card - image is square, resize it to 159x159 at \"$tmp_dir/[file tail [file rootname $cardfile].png]\""
-									exec magick -background none "$cardfile" -resize 159x159 "$tmp_dir/[file tail [file rootname $cardfile].png]"
-								} elseif {$ratio == 1.6} {
-									puts $debug ".add_card - image is ratio 1.6, resize it to 254x159 at \"$tmp_dir/[file tail [file rootname $cardfile].png]\""
-									exec magick "$cardfile" -resize 254x159 "$tmp_dir/[file tail [file rootname $cardfile].png]"
-								} elseif {$ratio > 1.6} {
-									set x 254
-									set y [expr int(254 / $ratio)]
-									puts $debug ".add_card - image ratio > 1.6, resize it to ${x}x${y} at \"$tmp_dir/[file tail [file rootname $cardfile].png]\""
-									exec magick -background none "$cardfile" -resize ${x}x$y "$tmp_dir/[file tail [file rootname $cardfile].png]"
-								} else {
-									set x [expr int(159 * $ratio)]
-									set y 159
-									puts $debug ".add_card - image ratio < 1.6, resize it to ${x}x${y} at \"$tmp_dir/[file tail [file rootname $cardfile].png]\""
-									exec magick -background none "$cardfile" -resize ${x}x$y "$tmp_dir/[file tail [file rootname $cardfile].png]"
-								}
-								set cardfile "$tmp_dir/[file tail [file rootname $cardfile].png]"
-							}
-							puts $debug "add_card - $cardfile selected"
-							image create photo ${cardname}_card -file "$cardfile"
-							.add_card_data image create 5.0 -image ${cardname}_card -padx 30
-							# now change the scan select message
-							insert_message .add_card_data 3 "Finally, optionally: either select an image from file or scan the back of the card"
-						}
-					} else {
-						grid remove .add_card
-						show_file_list
-						tkwait variable selected
-						set cardback $selected
-						set selected ""
-						grid .add_card -in . -row 4 -column 1 \
-							-columnspan 3 \
-							-sticky we
-						set_buttons add
-						puts $debug ".add_card - select returned $cardback"
-						if {$cardback != ""} {
-							if {$magick} {
-								puts $debug ".add_card - create png image if necessary and resize it"
-								set dim [split [exec identify  -format "%w %h\n" "$cardback"] " "]
-								puts $debug "Dimensions of $cardback are $dim"
-								set width [lindex $dim 0]
-								set height [lindex $dim 1]
-								puts $debug "Dimensions of $cardback are $width x $height"
-								# get the ratio of the image
-								set ratio [expr (round(($width * 10.0) / $height)) / 10.0]
-								puts $debug "Ratio of the image is $ratio"
-								if {$ratio == 1.0} {
-									puts $debug ".add_card - image is square, resize it to 159x159 at \"$tmp_dir/[file tail [file rootname $cardback].png]\""
-									exec magick -background none "$cardback" -resize 159x159 "$tmp_dir/[file tail [file rootname $cardback].png]"
-								} elseif {$ratio == 1.6} {
-									puts $debug ".add_card - image is ratio 1.6, resize it to 254x159 at \"$tmp_dir/[file tail [file rootname $cardback].png]\""
-									exec magick "$cardback" -resize 254x159 "$tmp_dir/[file tail [file rootname $cardback].png]"
-								} elseif {$ratio > 1.6} {
-									set x 254
-									set y [expr int(254 / $ratio)]
-									puts $debug ".add_card - image ratio > 1.6, resize it to ${x}x${y} at \"$tmp_dir/[file tail [file rootname $cardback].png]\""
-									exec magick -background none "$cardback" -resize ${x}x$y "$tmp_dir/[file tail [file rootname $cardback].png]"
-								} else {
-									set x [expr int(159 * $ratio)]
-									set y 159
-									puts $debug ".add_card - image ratio < 1.6, resize it to ${x}x${y} at \"$tmp_dir/[file tail [file rootname $cardback].png]\""
-									exec magick -background none "$cardback" -resize ${x}x$y "$tmp_dir/[file tail [file rootname $cardback].png]"
-								}
-								set cardback "$tmp_dir/[file tail [file rootname $cardback].png]"
-							}
-							puts $debug "add_card - $cardback selected"
-							image create photo ${cardname}_back -file "$cardback"
-							.add_card_data image create 5.end -image ${cardname}_back -padx 30
-							# delete the message and the buttons, they are no longer needed
-							insert_message .add_card_data 3 ""
-							insert_message .add_card_data 4 ""
-						}
-					}
-				} \
-				-text "Select"
-			} -padx 20
-		.add_card_data tag add center 1.0 end
-	}
 }
+
+proc add_card_data {} {
+	
+global cardcode cardfilecardname card_dir debug magick mobile scan selected
+
+	.add_card_data configure -state normal
+	.add_card_data delete 1.0 end
+
+	# make sure there are at least 5 line in the widget
+	for {set line 1} {$line <= 5} {incr line} {
+		.add_card_data insert end "\n"
+	}
+		
+	set file "$card_dir/barcode.png"
+	file delete $file
+	set zintcode [string map {" " ""} $cardcode]
+	if {[string length $zintcode] == 13} {
+		set error [catch {exec zint --barcode=13 -o $file -d $zintcode} result]
+	} else {
+		set error [catch {exec zint --barcode=20 -o $file -d $zintcode} result]
+	}
+	if {$error != 0} {
+		insert_message .add_card_data 1 "There is an error in the code, the check digit may be wrong"
+		after 2000 {focus .add_code_entry}
+		after 5000 {insert_message .add_card_data 1 ""}
+		break
+	}
+	image create photo barcode -file $file
+	# make sure that the line is empty
+	insert_message .add_card_data 2 ""
+	# hide the squeekboard
+	if {$mobile} {
+		exec busctl call --user sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 SetVisible b false
+	}
+	# insert the barcode
+	.add_card_data image create 2.0 -image barcode
+	#.add_card_data tag add center 2.0 2.end
+	file delete $file
+
+	# insert a message at line 3
+	insert_message .add_card_data 3 "Optionally: either select an image from file or scan the front of the card"
+	puts $debug "Scan or Select message placed in line [.add_card_data count -displaylines 0.0 end]"
+	
+	# if scanning is enabled add a scan button
+	if {$scan} {
+		.add_card_data window create 4.end -create {
+			button .add_scan \
+				-command {
+					scan_card $cardname $cardcode
+				} \
+				-text "Scan"
+		} -padx 20
+	}
+
+	# in any case add a select button
+	.add_card_data window create 4.end -create {
+		button .add_select \
+			-command {
+				if {$cardfile == ""} {
+					grid remove .add_card
+					show_file_list
+					tkwait variable selected
+					set cardfile $selected
+					set selected ""
+					grid .add_card -in . -row 4 -column 1 \
+						-columnspan 3 \
+						-sticky we
+						
+					set_buttons add
+					
+					puts $debug ".add_card - select returned $cardfile"
+
+					if {$cardfile != ""} {
+						if {$magick} {
+							puts $debug ".add_card - resize the image to 254x159 at \"$tmp_dir/cardfile.png\""
+							set error [catch {exec magick -verbose  "$cardfile" -resize 254x159 -background none -compose Copy -gravity center -extent 254x159 "$tmp_dir/cardfile.png"} result]
+							puts $debug ".add_card - magick \"$cardfile\" to \"$tmp_dir/cardfile.png\" with error $error and result \"$result\""
+							set cardfile "$tmp_dir/cardfile.png"
+							puts $debug ".add_card - cardfile is now $tmp_dir/cardfile.png"
+						}
+						puts $debug "add_card - $cardfile selected"
+						image create photo ${cardname}_card -file "$cardfile"
+						.add_card_data image create 5.0 -image ${cardname}_card -padx 30
+						# now change the scan select message
+						insert_message .add_card_data 3 "Finally, optionally: either select an image from file or scan the back of the card"
+					}
+				} else {
+					grid remove .add_card
+					show_file_list
+					tkwait variable selected
+					set cardback $selected
+					set selected ""
+					grid .add_card -in . -row 4 -column 1 \
+						-columnspan 3 \
+						-sticky we
+					set_buttons add
+					puts $debug ".add_card - select returned $cardback"
+					if {$cardback != ""} {
+						if {$magick} {
+							puts $debug ".add_card - resize the image to 254x159 at \"$tmp_dir/cardback.png\""
+							set error [catch {exec magick -verbose "$cardback" -resize 254x159 -background none -compose Copy -gravity center -extent 254x159 "$tmp_dir/cardback.png"} result]
+							puts $debug ".add_card - magick \"$cardback\" to \"$tmp_dir/cardback.png\" with error $error and result \"$result\""
+							set cardback "$tmp_dir/cardback.png"
+							puts $debug ".add_card - cardback is now $cardback"
+						}
+						puts $debug "add_card - $cardback selected"
+						image create photo ${cardname}_back -file "$cardback"
+						.add_card_data image create 5.end -image ${cardname}_back -padx 30
+						# delete the message and the buttons, they are no longer needed
+						insert_message .add_card_data 3 ""
+						insert_message .add_card_data 4 ""
+					}
+				}
+			} \
+			-text "Select"
+		} -padx 20
+	.add_card_data tag add center 1.0 end
+}
+
 
 proc delete_card {} {
 
@@ -314,10 +297,12 @@ global card_dir card_list cardname debug delete
 	puts $debug "delete_card called - cardname is $cardname"
 	
 	if {!$delete} {
+		set cardname ""
+		# now select a card
 		set delete true
 		.message configure -text "SELECT THE CARD TO DELETE AND HIT DELETE (-) AGAIN"
 	} else {
-		# now delete $cardname
+		# now delete card
 		puts $debug "delete_card - $cardname"
 		
 		puts $debug "delete_card - search list for \"[string tolower $cardname:*]\""
@@ -461,7 +446,7 @@ global add_text backlight backlight_now backlight_max bardcode card_dir card_lis
 				if {$cardname == ""} {focus .add_name_entry}
 			} else {
 				# make sure that barcode has been set
-				if {!$barcode} {set barcode ""}
+				if {!$barcode} {set barcode true}
 				# add the card name and code to the list
 				lappend card_list "[string tolower "$cardname"]:$cardcode" 
 	
@@ -695,7 +680,7 @@ global add_text card_dir card_list cardname colours debug delete_text front back
 		-columnspan 2 \
 		-sticky we
 	
-	grid .card_list -in .cards -row 1 -column 1 
+	grid .card_list -in .cards -row 1 -column 2 
 	
 	set_buttons cards
 	
@@ -746,7 +731,7 @@ global card_dir debug directory magick tmp_dir
 	set dirlist [lsort [glob -directory $directory -nocomplain -tails -types {d r x} *]]
 	
 	if {$magick} {
-		set filelist [lsort [glob -directory $directory -nocomplain -tails *.jpg *.jpeg *.svg *.svgz *.pdf *.png *.pnm]]
+		set filelist [lsort [glob -directory $directory -nocomplain -tails *.jpg *.jpeg *.png *.pnm *.svg *.svgz *.tif *.tiff]]
 	} else {
 		set filelist [lsort [glob -directory $directory -nocomplain -tails *.png]]
 	}
@@ -760,16 +745,29 @@ global card_dir debug directory magick tmp_dir
 		.file_list image create end -image dir_icon -padx 20
 		.file_list insert end "Cards\n"
 	}
+	
 	foreach dir $dirlist {
 		if {$dir == ""} {continue}
 		.file_list image create end -image dir_icon -padx 20
 		.file_list insert end "$dir\n"
 	}
+	
+	if {$filelist == ""} {.file_list insert end "    --------- No Images ---------"}
+
 	foreach file $filelist {
 		if {$file == ""} {continue}
 		# if the extension is not .png then use magick to create an icon from the png image
-		# unless it is an svg which is way too slow to convert
-		if {[file extension $file] != ".svg" && [file extension $file] != ".svgz"} {
+		# unless it is an svg or tif which are too slow to convert at this point
+		# could try converting the small files and not the large ones, but that could be confusing
+		if {[file extension $file] == ".svg"} {
+			.file_list image create end -image svg_icon -padx 20
+		} elseif {[file extension $file] == ".svgz"} {
+			.file_list image create end -image svgz_icon -padx 20
+		} elseif {[file extension $file] == ".tif" || [file extension $file] == ".tiff"} {
+			.file_list image create end -image tiff_icon -padx 20
+		} elseif {[file size "$directory/$file"] > 100000} {
+			.file_list image create end -image large_icon -padx 20
+		} else {
 			if {[file extension $file] == ".png"} {
 				image create photo ${file}_card -file "$directory/$file"
 			} else {
@@ -779,29 +777,86 @@ global card_dir debug directory magick tmp_dir
 			image create photo ${file}_icon
 			${file}_icon copy ${file}_card -subsample 6
 			.file_list image create end -image ${file}_icon -padx 20
-		} else {
-			.file_list image create end -image svg_icon -padx 20
-		}
+		} 
 		.file_list insert end "$file\n"
 	}
 	
-	set first ""
-	set last ""
-	set text $directory
-	puts $debug "The wraplength of .message is [.message cget -wraplength]"
-	puts $debug "The width of the .message font ([.message cget -font]) is [font measure [.message cget -font] 0]"
-	puts $debug "The wraplength in characters of the message widget is [expr int([.message cget -wraplength]/[font measure [.message cget -font] 0])]"
+	# The wraplength of .message is [.message cget -wraplength]
+	# The width of the .message font ([.message cget -font]) is [font measure [.message cget -font] 0]
+	# The wraplength in characters of the message widget is [expr int([.message cget -wraplength]/[font measure [.message cget -font] 0])]
 	set wrap [expr int([.message cget -wraplength]/[font measure [.message cget -font] 0])]
-	if {[string length $text] > $wrap} {
-		set first [string range $text 0 $wrap]
-		set last [string range $text $wrap+1 end]
+
+	#set lines [expr [string length $directory] / ($wrap * 1.0)]
+	
+	# now calculate the, up to, three lines of text for the directory
+	set first ""
+	set second ""
+	set third ""
+	set remainder "$directory"
+
+	# first line
+	set first [string range $remainder 0 $wrap] 
+	if {[string length $first] > $wrap} {
+		# try and split by /
 		set index [string last "/" $first]
 		if {$index != -1} {
-			set first [string range $text 0 $index]
-			set last [string range $text $index+1 end]
+			set remainder [string range $remainder $index+1 end]
+			set first [string range $first 0 $index] 
+		} else {
+			# try and split by space
+			set index [string last " " $first]
+			if {$index != -1} {
+				set remainder [string range $remainder $index+1 end]
+				set first [string range $first 0 $index] 
+			} else {
+				# split by length
+				set remainder [string range $remainder $wrap+1 end]
+				set first [string range $first 0 $wrap]					
+			}
 		}
-		set text "$first\n$last"
+	} else {
+		set remainder ""
 	}
+
+	# second line
+	set second [string range $remainder 0 $wrap] 
+	if {[string length $second] > $wrap} {
+		# try and split by /
+		set index [string last "/" $second]
+		if {$index != -1} {
+			set remainder [string range $remainder $index+1 end]
+			set second [string range $second 0 $index] 
+		} else {
+			# try and split by space
+			set index [string last " " $second]
+			if {$index != -1} {
+				set remainder [string range $remainder $index+1 end]
+				set second [string range $second 0 $index] 
+			} else {
+				# split by length
+				set remainder [string range $remainder $wrap+1 end]
+				set second [string range $second 0 $wrap]					
+			}
+		}
+	} else {
+		set remainder ""
+	}
+
+	# third line
+	set third $remainder 
+	if {[string length $third] > $wrap} {
+		set third "... [string range $third [expr [string length $third] - ($wrap - 4)] end]"
+	}
+
+	# arrange the text
+	set text $first
+	if {$second != ""} {
+		set text "${text}\n${second}"
+		if {$third != ""} {
+			set text "${text}\n${third}"
+		}
+	}
+	
 	.message configure -text "$text"
 }
 
@@ -819,7 +874,7 @@ global add_text card_dir selected debug delete_text filename directory
 		-columnspan 2 \
 		-sticky nswe
 	
-	grid .file_list -in .files -row 1 -column 1 
+	grid .file_list -in .files -row 1 -column 2 
 	
 	set_buttons show_files
 	
@@ -845,7 +900,7 @@ global cardcode cardname debug scanner selected
 		-columnspan 3 \
 		-sticky we
 		
-	grid .scan_card -in .scanner -row 1 -column 1
+	grid .scan_card -in .scanner -row 1 -column 2
 	
 	set_buttons scanner
 
@@ -902,7 +957,7 @@ global add_text card_dir card_list debug delete_text scanner
 		-columnspan 3 \
 		-sticky we
 		
-	grid .scan_card -in .scanner -row 1 -column 1
+	grid .scan_card -in .scanner -row 1 -column 2
 	
 	# enable the widget
 	.scan_card configure -state normal
@@ -1033,7 +1088,7 @@ global add_text backlight backlight_now backlight_max card_dir debug delete_text
 		-columnspan 3 \
 		-sticky we
 		
-		grid .card -in .show_card -row 1 -column 1 \
+		grid .card -in .show_card -row 1 -column 2 \
 			-sticky nswe
 	
 	# enable the widget
@@ -1132,8 +1187,11 @@ image create photo scan -file "$icon_dir/scan.png"
 # folder icons
 image create photo dir_icon -file "$icon_dir/folder-blue.png"
 image create photo home_icon -file "$icon_dir/go-home.png"
+image create photo large_icon -file "$icon_dir/large-icon.png"
 image create photo root_icon -file "$icon_dir/folder-red.png"
 image create photo svg_icon -file "$icon_dir/svg-icon.png"
+image create photo svgz_icon -file "$icon_dir/svgz-icon.png"
+image create photo tiff_icon -file "$icon_dir/tiff-icon.png"
 
 # WINDOWS
 
@@ -1222,15 +1280,16 @@ frame .cards
 	.card_list configure -selectbackground [.card_list cget -background]
 		
 	bind .card_list <ButtonPress-1> {
+		set markcol %x
 		set markrow %y
-		puts $debug "Button 1 pressed at %y"
+		puts $debug "Button 1 pressed at %x %y"
 		.card_list scan mark %x %y
 		scroll_text .card_list on
 	}
 	bind .card_list <ButtonRelease-1> {
-		puts $debug "Button 1 released at %y"
+		puts $debug "Button 1 released at %x %y"
 		scroll_text .card_list off
-		if {$markrow == %y} {	
+		if {$markcol == %x && $markrow == %y} {	
 			set index [.card_list index @%x,%y]
 			set line [expr int($index)]
 			
@@ -1317,7 +1376,7 @@ frame .files
 				if {[string first "//" $directory] == 0} {set directory [string range $directory 1 end]}
 				get_file_list				
 				set filename ""
-			} else {
+			} elseif {[file readable "$directory/$filename"]} {
 				# highlight the line
 				.file_list tag add highlight $line.0 $line.end 
 				set_buttons add_file
@@ -1397,6 +1456,7 @@ frame .add_card
 		-width 25
 	
 	bind .add_code_entry <FocusIn> {
+		
 		# raise the squeekboard
 		if {$mobile} {
 			exec busctl call --user sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 SetVisible b true
@@ -1413,32 +1473,14 @@ frame .add_card
 				after 2000 {focus .add_code_entry}
 				after 5000 {insert_message .add_card_data 1 ""}
 			}
-		# otherwise, if we have not set the barcode yet
-		} elseif {!$barcode} {
-			set file "$card_dir/barcode.png"
-			file delete $file
-			set zintcode [string map {" " ""} $cardcode]
-			if {[string length $zintcode] == 13} {
-				exec zint --barcode=13 -o $file -d $zintcode
-			} else {
-				exec zint --barcode=20 -o $file -d $zintcode
-			}
-			image create photo barcode -file $file
-			# make sure that the line is empty
-			insert_message .add_card_data 2 ""
-			# hide the squeekboard
-			if {$mobile} {
-				exec busctl call --user sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 SetVisible b false
-			}
-			# insert the barcode
-			.add_card_data image create 2.0 -image barcode
-			#.add_card_data tag add center 2.0 2.end
-			file delete $file
-			set barcode true
+		} elseif  {[focus] == ".add_card_data"} {
+			add_card_data
 		}
-	}	
-	
-	bind .add_code_entry <Return> [bind .add_code_entry <FocusOut>]
+	}
+
+	bind .add_code_entry <Return> {
+		focus .add_card_data
+	}
 	
 	# the width of the text box depends on the size of the font, e.g.12 is 72
 	text .add_card_data \
@@ -1467,7 +1509,7 @@ frame .add_card
 	}
 	# center all the objects in the widget
 	.add_card_data tag add center 0.0 end
-	# and disble the widget to stop direct entries
+	# and disable the widget to stop direct entries
 	.add_card_data configure -state disabled
 	
 	# set the selectbackground to the normal background
@@ -1495,10 +1537,6 @@ frame .scanner
 		.scan_card scan mark %x %y
 		scroll_text .scan_card on
 	}
-#	bind .scan_card <ButtonRelease-1> {
-#		puts $debug "Button 1 released at %y"
-#		scroll_text .scan_card off
-#	}
 		
 	# set the width of the text
 	.scan_card configure -width [expr int($screen_width / [font measure [.scan_card cget -font] 0])]
@@ -1572,10 +1610,7 @@ grid .delete -in . -row 2 -column 3  \
 grid .add_label -in . -row 3 -column 1 
 grid .delete_label -in . -row 3 -column 3
 
-# the .show_card frame
-
-grid .card -in .show_card -row 1 -column 1 \
-	-columnspan 2
+# grid settings for main window
 
 grid columnconfigure . 1 -weight 0 -minsize 0 -pad 0
 grid columnconfigure . 2 -weight 1 -minsize 0 -pad 0
@@ -1587,27 +1622,37 @@ grid rowconfigure . 4 -weight 1 -minsize 0 -pad 0
 
 # grid settings for each frame
 
-grid columnconfigure .cards 1 -weight 0 -minsize 0 -pad 0
+grid columnconfigure .cards 1 -weight 1 -minsize 0 -pad 0
+grid columnconfigure .cards 2 -weight 0 -minsize 0 -pad 0
+grid columnconfigure .cards 3 -weight 1 -minsize 0 -pad 0
 grid rowconfigure .cards 1 -weight 1 -minsize 0 -pad 0
 grid rowconfigure .cards 2 -weight 0 -minsize 0 -pad 0
 
-grid columnconfigure .files 1 -weight 0 -minsize 0 -pad 0
+grid columnconfigure .files 1 -weight 1 -minsize 0 -pad 0
+grid columnconfigure .files 2 -weight 0 -minsize 0 -pad 0
+grid columnconfigure .files 3 -weight 1 -minsize 0 -pad 0
 grid rowconfigure .files 1 -weight 1 -minsize 0 -pad 0
 grid rowconfigure .files 2 -weight 0 -minsize 0 -pad 0
 
 
-grid columnconfigure .add_card 1 -weight 0 -minsize 0 -pad 0
+grid columnconfigure .add_card 1 -weight 1 -minsize 0 -pad 0
 grid columnconfigure .add_card 2 -weight 0 -minsize 0 -pad 0
+grid columnconfigure .add_card 3 -weight 0 -minsize 0 -pad 0
+grid columnconfigure .add_card 4 -weight 1 -minsize 0 -pad 0
 grid rowconfigure .add_card 1 -weight 0 -minsize 0 -pad 0
 grid rowconfigure .add_card 2 -weight 0 -minsize 0 -pad 0
 grid rowconfigure .add_card 3 -weight 1 -minsize 0 -pad 0
 grid rowconfigure .add_card 4 -weight 0 -minsize 0 -pad 0
 
-grid columnconfigure .scanner 1 -weight 0 -minsize 0 -pad 0
+grid columnconfigure .scanner 1 -weight 1 -minsize 0 -pad 0
+grid columnconfigure .scanner 2 -weight 0 -minsize 0 -pad 0
+grid columnconfigure .scanner 3 -weight 1 -minsize 0 -pad 0
 grid rowconfigure .scanner 1 -weight 1 -minsize 0 -pad 0
 grid rowconfigure .scanner 2 -weight 0 -minsize 0 -pad 0
 
-grid columnconfigure .show_card 1 -weight 0 -minsize 0 -pad 0
+grid columnconfigure .show_card 1 -weight 1 -minsize 0 -pad 0
+grid columnconfigure .show_card 2 -weight 0 -minsize 0 -pad 0
+grid columnconfigure .show_card 3 -weight 1 -minsize 0 -pad 0
 grid rowconfigure .show_card 1 -weight 1 -minsize 0 -pad 0
 grid rowconfigure .show_card 2 -weight 0 -minsize 0 -pad 0
 

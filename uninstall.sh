@@ -1,4 +1,4 @@
-#! /bin/bash
+#! /usr/bin/sh
 
 sudo rm /usr/bin/storecards
 sudo rm -rf /usr/share/pixmaps/storecards
