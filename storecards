@@ -936,9 +936,12 @@ global cardcode cardname debug scanner selected
 
 proc scan_card {cardname cardcode} {
 
-global add_text card_dir card_list debug delete_text scanner
+global add_text card_dir card_list debug delete_text scanner selected
 
 	puts $debug "scan_card called - cardname is $cardname"
+	
+	# set selected so that the highlight tags are not applied yet
+	set selected "scan_card"
 
 	if {[exec ip route] == ""} {
 		.message configure -text "WARNING: no network"
@@ -1546,7 +1549,7 @@ frame .scanner
 	
 	# set up some tags for the text field '.scan_card'
 	.scan_card tag configure center -justify center
-	.scan_card  tag configure highlight -foreground "Blue" -font "TkTextFont 12 bold"
+	.scan_card tag configure highlight -foreground "Blue" -font "TkTextFont 12 bold"
 	
 	bind .scan_card <ButtonRelease-1> {
 		puts $debug "Button 1 released at %y"
@@ -1557,7 +1560,7 @@ frame .scanner
 			.scan_card tag add highlight $line.0 $line.end 
 			set selected [.scan_card get -displaychars $line.0 $line.end]
 			puts $debug "ButtonRelease on .scan_card - index is $index, line is $line, cardname is $cardname, scanner is $scanner"
-		} else {
+		} elseif {$selected != "scan_card"} {
 			set selected ""
 			# don't throw an error if the tags have already been deleted
 			catch {.scan_card tag remove highlight highlight.first highlight.last}
