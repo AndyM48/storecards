@@ -155,9 +155,8 @@ global debug
 		grid .add_name_entry -in .add_card -row 1 -column 3
 		grid .add_code_label -in .add_card -row 2 -column 2
 		grid .add_code_entry -in .add_card -row 2 -column 3
-		
 		grid .add_card_data -in .add_card -row 3 -column 2 \
-			-columnspan 2 \
+			-columnspan 3 \
 			-sticky w
 	
 	set_buttons add
@@ -677,9 +676,9 @@ global add_text card_dir card_list cardname colours debug delete_text front back
 
 	# grid the frame
 	grid .cards -in . -row 4 -column 1 \
-		-columnspan 2 \
+		-columnspan 3 \
 		-sticky we
-	
+
 	grid .card_list -in .cards -row 1 -column 2 
 	
 	set_buttons cards
@@ -868,10 +867,10 @@ global add_text card_dir selected debug delete_text filename directory
 	puts $debug "show_file_list called"
 
 	set filename ""
-	
+
 	# grid the frame
 	grid .files -in . -row 4 -column 1 \
-		-columnspan 2 \
+		-columnspan 3 \
 		-sticky nswe
 	
 	grid .file_list -in .files -row 1 -column 2 
@@ -897,7 +896,7 @@ global cardcode cardname debug scanner selected
 
 	# grid the frame
 	grid .scanner -in . -row 4 -column 1 \
-		-columnspan 3 \
+		-columnspan 4 \
 		-sticky we
 		
 	grid .scan_card -in .scanner -row 1 -column 2
@@ -936,9 +935,14 @@ global cardcode cardname debug scanner selected
 
 proc scan_card {cardname cardcode} {
 
-global add_text card_dir card_list debug delete_text scanner selected
+global add_text cardfile card_dir card_list debug delete_text scanner scan_side selected
 
 	puts $debug "scan_card called - cardname is $cardname"
+	
+	set scan_side "front"
+	if {$cardfile != ""} {
+		set scan_side "back"
+	}
 	
 	# set selected so that the highlight tags are not applied yet
 	set selected "scan_card"
@@ -954,10 +958,10 @@ global add_text card_dir card_list debug delete_text scanner selected
 	
 	# remove the .add_card frame but keep its contents
 	grid remove .add_card
-	
+
 	# grid the frame
 	grid .scanner -in . -row 4 -column 1 \
-		-columnspan 3 \
+		-columnspan 4 \
 		-sticky we
 		
 	grid .scan_card -in .scanner -row 1 -column 2
@@ -986,7 +990,7 @@ global add_text card_dir card_list debug delete_text scanner selected
 	# and center the lines
 	.scan_card tag add center 1.0 end
 	
-	insert_message .scan_card 2 "Scan the front of the $cardname card or select a different scanner"
+	insert_message .scan_card 2 "Scan the $scan_side of the $cardname card or select a different scanner"
 
 	.scan_card window create 3.0 -create {
 		button .scanner_scan \
@@ -1085,10 +1089,10 @@ global add_text backlight backlight_now backlight_max card_dir debug delete_text
 
 	# remove the .cards frame
 	grid forget .cards
-		
+	
 	# grid the frame
 	grid .show_card -in . -row 4 -column 1 \
-		-columnspan 3 \
+		-columnspan 4 \
 		-sticky we
 		
 		grid .card -in .show_card -row 1 -column 2 \
@@ -1212,9 +1216,13 @@ puts $debug "Set up windows"
 # the result will work best in portrait mode, and not so well in landscape mode, but rotating the screen is not supported.
 
 if {$mobile} {
-	puts $debug "Screen width set to [winfo vrootwidth .]"
 	puts $debug "Geomtry set to [winfo vrootwidth .]x[winfo vrootheight .]+0+32"
+	# if in landscape mode set the width to the smaller dimension
 	set screen_width [winfo vrootwidth .]
+	if {[winfo vrootheight .] < [winfo vrootwidth .]} {
+		set screen_width [winfo vrootheight .]
+	}
+	puts $debug "Screen width set to [winfo vrootwidth .]"
 	wm geometry . "[winfo vrootwidth .]x[winfo vrootheight .]+0+32"
 } else {
 	# this geometry mimicks the pinephone screen in portrait mode	
@@ -1249,11 +1257,11 @@ label .message \
 	-text "" \
 	-wraplength 22
 	
-	# set the wraplength of the label
-	puts $debug "The screen width is $screen_width"
+	# note that for mobile dvices the wraplength uses the portrait mode screen width to allow for rotation
 	puts $debug "The two buttons are 48+4 pixels each"
 	puts $debug "The maximum width of the label is [expr $screen_width - (52 * 2)]"
 	.message configure -wraplength [expr $screen_width - (52 * 2)]
+
 	
 button .delete \
 	-command {} \
@@ -1275,9 +1283,11 @@ frame .cards
 		-foreground "Black" \
 		-spacing1 30 \
 		-wrap word 
-		
-	# set the width of the text
+	
+if {!$mobile} {	
+	# set the width of the text 
 	.card_list configure -width [expr int($screen_width / [font measure [.card_list cget -font] 0])]
+}
 	
 	# set the selectbackground to the normal background
 	.card_list configure -selectbackground [.card_list cget -background]
@@ -1328,10 +1338,11 @@ frame .files
 		-font "TkTextFont 12" \
 		-foreground "Black" \
 		-spacing1 10 
-		#-wrap word 
-	
+
+if {!$mobile} {	
 	# set the width of the text
 	.file_list configure -width [expr int($screen_width / [font measure [.file_list cget -font] 0])]
+}
 	
 	# set the selectbackground to the normal background
 	.file_list configure -selectbackground [.file_list cget -background]
@@ -1395,9 +1406,10 @@ frame .files
 frame .add_card
 
 	label .add_name_label \
-		-anchor nw \
+		-anchor ne \
+		-font "TkTextFont 8" \
 		-height 2 \
-		-text "NAME:" \
+		-text "NAME: " \
 		-width 7
 		
 	entry .add_name_entry \
@@ -1440,9 +1452,10 @@ frame .add_card
 	bind .add_name_entry <Return> [bind .add_name_entry <FocusOut>]
 		
 	label .add_code_label \
-		-anchor nw \
+		-anchor ne \
+		-font "TkTextFont 8" \
 		-height 2 \
-		-text "CODE:" \
+		-text "CODE: " \
 		-width 7
 		
 	entry .add_code_entry \
@@ -1502,28 +1515,18 @@ frame .add_card
 		puts $debug "Button 1 released at %y"
 		scroll_text .add_card_data off
 	}
-		
+
+if {!$mobile} {	
 	# set the width of the text
 	.add_card_data configure -width [expr int($screen_width / [font measure [.add_card_data cget -font] 0])]
-	
-	# make sure there are at least 5 line in the widget
-	for {set line 1} {$line <= 5} {incr line} {
-		.add_card_data insert end "\n"
-	}
-	# center all the objects in the widget
-	.add_card_data tag add center 0.0 end
-	# and disable the widget to stop direct entries
-	.add_card_data configure -state disabled
+}
 	
 	# set the selectbackground to the normal background
 	.add_card_data configure -selectbackground [.add_card_data cget -background]
 		
 	# set up some tags for the text field '.add_card_data'
 	.add_card_data tag configure center -justify center
-	
-	puts $debug "The requested width of the .add_card_data widget is [winfo reqwidth .add_card_data]"
-	puts $debug "The width of the .add_card_data font ([.add_card_data cget -font]) is [font measure [.add_card_data cget -font] 0]"
-	
+		
 frame .scanner
 
 	# the width of the text box depends on the size of the font, e.g.12 is 72	
@@ -1540,9 +1543,11 @@ frame .scanner
 		.scan_card scan mark %x %y
 		scroll_text .scan_card on
 	}
-		
+
+if {!$mobile} {		
 	# set the width of the text
 	.scan_card configure -width [expr int($screen_width / [font measure [.scan_card cget -font] 0])]
+}
 	
 	# set the selectbackground to the normal background
 	.scan_card configure -selectbackground [.card_list cget -background]
@@ -1590,10 +1595,12 @@ frame .show_card
 		puts $debug "Button 1 released at %y"
 		scroll_text .card off
 	}
-		
+
+if {!$mobile} {		
 	# set the width of the text
 	.card configure -width [expr int($screen_width / [font measure [.card cget -font] 0])]
-	
+}
+
 	# set the selectbackground to the normal background
 	.card configure -selectbackground [.card cget -background]
 	
@@ -1625,37 +1632,36 @@ grid rowconfigure . 4 -weight 1 -minsize 0 -pad 0
 
 # grid settings for each frame
 
-grid columnconfigure .cards 1 -weight 1 -minsize 0 -pad 0
-grid columnconfigure .cards 2 -weight 0 -minsize 0 -pad 0
-grid columnconfigure .cards 3 -weight 1 -minsize 0 -pad 0
+grid columnconfigure .cards 1 -weight 0 -minsize 0 -pad 0
+grid columnconfigure .cards 2 -weight 1 -minsize 0 -pad 0
+grid columnconfigure .cards 3 -weight 0 -minsize 0 -pad 0	
 grid rowconfigure .cards 1 -weight 1 -minsize 0 -pad 0
 grid rowconfigure .cards 2 -weight 0 -minsize 0 -pad 0
 
-grid columnconfigure .files 1 -weight 1 -minsize 0 -pad 0
-grid columnconfigure .files 2 -weight 0 -minsize 0 -pad 0
-grid columnconfigure .files 3 -weight 1 -minsize 0 -pad 0
+grid columnconfigure .files 1 -weight 0 -minsize 0 -pad 0
+grid columnconfigure .files 2 -weight 1 -minsize 0 -pad 0
+grid columnconfigure .files 3 -weight 0 -minsize 0 -pad 0
 grid rowconfigure .files 1 -weight 1 -minsize 0 -pad 0
 grid rowconfigure .files 2 -weight 0 -minsize 0 -pad 0
 
-
-grid columnconfigure .add_card 1 -weight 1 -minsize 0 -pad 0
-grid columnconfigure .add_card 2 -weight 0 -minsize 0 -pad 0
-grid columnconfigure .add_card 3 -weight 0 -minsize 0 -pad 0
-grid columnconfigure .add_card 4 -weight 1 -minsize 0 -pad 0
+grid columnconfigure .add_card 1 -weight 0 -minsize 0 -pad 0
+grid columnconfigure .add_card 2 -weight 1 -minsize 40 -pad 0
+grid columnconfigure .add_card 3 -weight 1 -minsize 0 -pad 0
+grid columnconfigure .add_card 4 -weight 0 -minsize 0 -pad 0
 grid rowconfigure .add_card 1 -weight 0 -minsize 0 -pad 0
 grid rowconfigure .add_card 2 -weight 0 -minsize 0 -pad 0
 grid rowconfigure .add_card 3 -weight 1 -minsize 0 -pad 0
 grid rowconfigure .add_card 4 -weight 0 -minsize 0 -pad 0
 
-grid columnconfigure .scanner 1 -weight 1 -minsize 0 -pad 0
-grid columnconfigure .scanner 2 -weight 0 -minsize 0 -pad 0
-grid columnconfigure .scanner 3 -weight 1 -minsize 0 -pad 0
+grid columnconfigure .scanner 1 -weight 0 -minsize 0 -pad 0
+grid columnconfigure .scanner 2 -weight 1 -minsize 0 -pad 0
+grid columnconfigure .scanner 3 -weight 0 -minsize 0 -pad 0
 grid rowconfigure .scanner 1 -weight 1 -minsize 0 -pad 0
 grid rowconfigure .scanner 2 -weight 0 -minsize 0 -pad 0
 
-grid columnconfigure .show_card 1 -weight 1 -minsize 0 -pad 0
-grid columnconfigure .show_card 2 -weight 0 -minsize 0 -pad 0
-grid columnconfigure .show_card 3 -weight 1 -minsize 0 -pad 0
+grid columnconfigure .show_card 1 -weight 0 -minsize 0 -pad 0
+grid columnconfigure .show_card 2 -weight 1 -minsize 0 -pad 0
+grid columnconfigure .show_card 3 -weight 0 -minsize 0 -pad 0
 grid rowconfigure .show_card 1 -weight 1 -minsize 0 -pad 0
 grid rowconfigure .show_card 2 -weight 0 -minsize 0 -pad 0
 
