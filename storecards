@@ -1,6 +1,6 @@
 #!/bin/sh
 # the next line restarts using wish \
-exec wish "$0" -- "$@"
+exec wish "$0" "$@"
 
 #    Copyright (C) 2018 - 2022  Andrew Myers <andrew dot myers@wanadoo dot fr>
 #
@@ -78,6 +78,7 @@ if {[catch {exec  ps -el | grep phosh}]} {
 	set debug [open $home/storecards.debug w]
 } else {
 	set mobile true
+	set debug [open $home/storecards.debug w]
 }
 # if imagemagick is available, is scanimage available to scan images
 if {$magick} {
@@ -201,7 +202,8 @@ global cardcode cardfilecardname card_dir debug magick mobile scan selected
 	insert_message .add_card_data 2 ""
 	# hide the squeekboard
 	if {$mobile} {
-		exec busctl call --user sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 SetVisible b false
+		set error [catch {exec busctl call --user sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 SetVisible b false}]
+		if {$error != 0} {puts $debug "add_card_data - failed to lower squeekboard"}
 	}
 	# insert the barcode
 	.add_card_data image create 2.0 -image barcode
@@ -915,15 +917,22 @@ global cardcode cardname debug scanner selected
 	
 	insert_message .scan_card 1 "Finding scanners ...."
 	update
-	set scanners [split [exec scanimage -f "\"%m\" \"%d\"%n"] \n]
-	puts $debug "get_scanner - found scanners \"$scanners\""
+	set error [catch {exec scanimage -f "\"%m\" \"%d\"%n"} scanners]
+	puts $debug "get_scanner - found scanners \"$scanners\"\nerror was $error"
+	set scanners [split $scanners \n]
 
 	insert_message .scan_card 1 "Choose a scanner:"
-
+	puts $debug "get_scanner - now list the scanners found"
+	
 	set count 2
 	foreach line $scanners {
-		insert_message .scan_card $count "$line"
-		incr count
+		if {[llength $line] == 2} {
+			puts $debug "\tinsert $line"
+			insert_message .scan_card $count "$line"
+			incr count
+		} else {
+			puts $debug "\tdiscard $line"
+		}
 	}
 	
 	# and disable the widget
@@ -1003,7 +1012,7 @@ global add_text cardfile card_dir card_list debug delete_text scanner scan_side 
 				update
 				puts $debug "scan_card - exec scanimage -d \"[lindex $scanner 1]\" --format=png --mode=Color -o \"$card_dir/scanned.png\""
 				set error [catch {exec scanimage -d "[lindex $scanner 1]" --format=png --mode=Color -o "$card_dir/scanned.png"} result]
-				if {$error != 0} {
+				if {$error != 0 && [file exists "$card_dir/scanned.png"] == 0} {
 					puts $debug "scan_card - scanimage error $result"
 					insert_message .scan_card 4 "Scanner [lindex $scanner 0] is not available"
 				} else {
@@ -1013,7 +1022,7 @@ global add_text cardfile card_dir card_list debug delete_text scanner scan_side 
 						# descew
 						exec magick "$card_dir/cropped.png" -deskew 80% "$card_dir/deskewed.png"
 						# now trim off the white space
-						exec magick "$card_dir/deskewed.png" -fuzz 25% -trim "$card_dir/trimmed.png"
+						exec magick "$card_dir/deskewed.png" -fuzz 50% -trim "$card_dir/trimmed.png"
 						# and save the card image
 						exec magick "$card_dir/trimmed.png" +repage -crop 254x159+0+0\! "$card_dir/scan.png"
 					} result]
@@ -1420,7 +1429,8 @@ frame .add_card
 	bind .add_name_entry <FocusIn> {
 		# raise the squeekboard
 		if {$mobile} {
-			exec busctl call --user sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 SetVisible b true
+			set error [catch {exec busctl call --user sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 SetVisible b true}]
+			if {$error != 0} {puts $debug "add_card - failed to raise squeekboard"}
 		}		
 	}
 		
@@ -1475,7 +1485,8 @@ frame .add_card
 		
 		# raise the squeekboard
 		if {$mobile} {
-			exec busctl call --user sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 SetVisible b true
+			set error [catch {exec busctl call --user sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 SetVisible b true}]
+			if {$error != 0} {puts $debug "add_card_entry - failed to raise squeekboard"}
 		}		
 	}
 	
