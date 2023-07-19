@@ -14,7 +14,12 @@ Imagemagick (magick) to read and convert different image types.
 
 Pinephone-Toolkit (pptk) to raise the backlight for easy scanning of barcodes ([AUR](https://aur.archlinux.org/packages/pinephone-toolkit-git/) or https://github.com/Dejvino/pinephone-toolkit)
 
-## Installaton
+## Screenshots
+
+![storecards_list](https://github.com/fdservices/storecards/assets/3006039/f5562f96-ec8b-4d9b-84b8-4c71c6a1d337)   ![storecards_card](https://github.com/fdservices/storecards/assets/3006039/f7f2e043-c2fd-4d9e-b6af-acc5b68aba19)
+
+
+## Installation
 
 Download the source code and run install.sh to:
 
