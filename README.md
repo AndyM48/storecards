@@ -16,7 +16,8 @@ Pinephone-Toolkit (pptk) to raise the backlight for easy scanning of barcodes ([
 
 ## Screenshots
 
-![storecards_list](https://github.com/fdservices/storecards/assets/3006039/f5562f96-ec8b-4d9b-84b8-4c71c6a1d337)   ![storecards_card](https://github.com/fdservices/storecards/assets/3006039/f7f2e043-c2fd-4d9e-b6af-acc5b68aba19)
+![storecards_list](https://github.com/fdservices/storecards/assets/3006039/f5562f96-ec8b-4d9b-84b8-4c71c6a1d337)   ![storecards_card](https://github.com/fdservices/storecards/assets/3006039/f7f2e043-c2fd-4d9e-b6af-acc5b68aba19)   ![storecards_scan](https://github.com/fdservices/storecards/assets/3006039/ac6e1144-4b9d-4693-ab69-8fa6aff34688)
+
 
 
 ## Installation
