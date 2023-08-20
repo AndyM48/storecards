@@ -1,6 +1,6 @@
 #!/bin/sh
 # the next line restarts using wish \
-exec wish "$0" "$@"
+exec wish "$0" -- "$@"
 
 #    Copyright (C) 2018 - 2022  Andrew Myers <andrew dot myers@wanadoo dot fr>
 #
@@ -44,7 +44,25 @@ if {[file exists "$card_dir/card_list"] == 0} {
 # make a temporary directory
 set tmp_dir "/tmp/storecards"
 file mkdir $tmp_dir
-	
+
+# set any options
+set debug stdout
+set mobile true
+if {$argc != 0} {
+	set options [split $argv " "]
+	foreach option $options {
+		if {[string first "-" $option] == 0} {
+			# d for debug
+			# x for not mobile
+			if {[string first "d" $option] != -1} {
+				set debug [open $home/storecards.debug w]
+			} elseif {[string first "x" $option] != -1} {
+				set mobile false
+			} 
+		}
+	}	
+}
+
 set add_text ""
 set backlight false
 set backlight-now 0
@@ -61,7 +79,6 @@ set cardfile ""
 set cardback ""
 
 set colours [list black blue gold green red white]
-set debug stdout
 set delete false
 set delete_text ""
 set filename ""
@@ -71,15 +88,6 @@ set magick false
 if {[catch {exec which magick}] == 0} {
 	set magick true
 } 
-# is this a mobile device
-if {[catch {exec  ps -el | grep phosh}]} {
-	set mobile false
-	# for non mobile devices set debug to file
-	set debug [open $home/storecards.debug w]
-} else {
-	set mobile true
-	set debug [open $home/storecards.debug w]
-}
 # if imagemagick is available, is scanimage available to scan images
 if {$magick} {
 	set scan true
