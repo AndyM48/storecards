@@ -1,3 +1,5 @@
+## ** storecards has moved to gitlab **
+
 # Store Cards
 
 Store Cards is built using Tcl/TK and Zint
